@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +7,8 @@ import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
+
+import 'camera_utils.dart';
 
 class ClassificationRequest {
   final Image? asset;
@@ -20,17 +21,14 @@ class ClassificationRequest {
 class IsolateStart {
   final SendPort sendPort;
   final int interpeterAddress;
-  final String documentsPath;
 
-  IsolateStart(this.sendPort, this.interpeterAddress, this.documentsPath);
+  IsolateStart(this.sendPort, this.interpeterAddress);
 }
 
 class ThreadedClassifier {
   static const int _inputSize = 416;
 
   late Interpreter _interpreter;
-
-  String _documentsPath;
 
   final List<String> _classes = [
     "num_10",
@@ -51,7 +49,7 @@ class ThreadedClassifier {
   /// Types of output tensors
   List<TfLiteType> _outputTypes = [];
 
-  ThreadedClassifier(int interpreterAddress, this._documentsPath) {
+  ThreadedClassifier(int interpreterAddress) {
     _interpreter = Interpreter.fromAddress(interpreterAddress);
 
     var outputTensors = _interpreter.getOutputTensors();
@@ -66,7 +64,7 @@ class ThreadedClassifier {
   Future<int> _classify(ClassificationRequest request) async {
     Image? image;
     if (request.image != null) {
-      image = _convertCameraImage(request.image!);
+      image = CameraUtils.convertCameraImage(request.image!);
       if (Platform.isAndroid) {
         image = copyRotate(image!, 90);
       }
@@ -78,13 +76,7 @@ class ThreadedClassifier {
       return 0;
     }
 
-    // Create TensorImage from image
-    // TensorImage inputImage = TensorImage.fromImage(image);
-    // // Pre-process TensorImage
-    // inputImage = _getProcessedImage(inputImage);
-
     image = copyResizeCropSquare(image, _inputSize);
-
     var tensorImage = _createTensorImage(image);
 
     var output = TensorBufferUint8(_outputShapes[0]);
@@ -97,8 +89,8 @@ class ThreadedClassifier {
     var members = output.getShape()![2];
     var listData = output.getIntList();
     for (int i = 0; i < items; ++i) {
-      var scoreA = listData[members * i + 4];
-      if (scoreA > 80) {
+      var score = listData[members * i + 4];
+      if (score > 80) {
         var splat = List.generate(
             members, (memberIndex) => listData[members * i + memberIndex]);
         var maxArg = 0, maxValue = 0;
@@ -111,21 +103,12 @@ class ThreadedClassifier {
         seenItems.add(maxArg);
       }
     }
+
     for (var seen in seenItems) {
       print("I see ${_classes[seen]}");
     }
 
     return seenItems.length;
-  }
-
-  TensorImage _getProcessedImage(TensorImage inputImage) {
-    var padSize = min(inputImage.height, inputImage.width);
-    var imageProcessor = ImageProcessorBuilder()
-        .add(ResizeWithCropOrPadOp(padSize, padSize))
-        .add(ResizeOp(_inputSize, _inputSize, ResizeMethod.BILINEAR))
-        .build();
-    inputImage = imageProcessor.process(inputImage);
-    return inputImage;
   }
 
   static void isolateEntry(IsolateStart isoStart) async {
@@ -134,14 +117,11 @@ class ThreadedClassifier {
     final port = ReceivePort();
     isoStart.sendPort.send(port.sendPort);
 
-    var classifier =
-        ThreadedClassifier(isoStart.interpeterAddress, isoStart.documentsPath);
+    var classifier = ThreadedClassifier(isoStart.interpeterAddress);
 
     await for (final ClassificationRequest? request in port) {
       if (request != null) {
         print("Recieved classification request, processing... ");
-
-        var predictStartTime = DateTime.now().microsecondsSinceEpoch;
 
         try {
           var resultCount = await classifier._classify(request);
@@ -168,85 +148,6 @@ class ThreadedClassifier {
 
     return tensorBuffer;
   }
-
-  static Image? _convertCameraImage(CameraImage cameraImage) {
-    if (cameraImage.format.group == ImageFormatGroup.yuv420) {
-      return convertYUV420ToImage(cameraImage);
-    } else if (cameraImage.format.group == ImageFormatGroup.bgra8888) {
-      return convertBGRA8888ToImage(cameraImage);
-    } else {
-      return null;
-    }
-  }
-
-  static Image convertBGRA8888ToImage(CameraImage cameraImage) {
-    Image img = Image.fromBytes(cameraImage.planes[0].width!,
-        cameraImage.planes[0].height!, cameraImage.planes[0].bytes,
-        format: Format.bgra);
-    return img;
-  }
-
-  /// Converts a [CameraImage] in YUV420 format to [imageLib.Image] in RGB format
-  static Image convertYUV420ToImage(CameraImage cameraImage) {
-    final int width = cameraImage.width;
-    final int height = cameraImage.height;
-
-    final int pixelStride = cameraImage.planes[0].bytesPerRow;
-
-    final int uvRowStride = cameraImage.planes[1].bytesPerRow;
-    final int uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
-
-    final image = Image(width, height);
-
-    for (int x = 0; x < width; x++) {
-      for (int y = 0; y < height; y++) {
-        final int uvIndex =
-            uvPixelStride * (x / 2).floor() + uvRowStride * (y / 2).floor();
-        final int index = y * pixelStride + x;
-
-        final yp = cameraImage.planes[0].bytes[index];
-        final up = cameraImage.planes[1].bytes[uvIndex];
-        final vp = cameraImage.planes[2].bytes[uvIndex];
-
-        int r = (yp + vp * 1436 / 1024 - 179).round().clamp(0, 255).toInt();
-        int g = (yp - up * 46549 / 131072 + 44 - vp * 93604 / 131072 + 91)
-            .round()
-            .clamp(0, 255)
-            .toInt();
-        int b = (yp + up * 1814 / 1024 - 227).round().clamp(0, 255).toInt();
-
-        image.setPixelRgba(x, y, r, g, b);
-      }
-    }
-    return image;
-  }
-
-  /// Convert a single YUV pixel to RGB
-  static int yuv2rgb(int y, int u, int v) {
-    // Convert yuv pixel to rgb
-    int r = (y + v * 1436 / 1024 - 179).round();
-    int g = (y - u * 46549 / 131072 + 44 - v * 93604 / 131072 + 91).round();
-    int b = (y + u * 1814 / 1024 - 227).round();
-
-    // Clipping RGB values to be inside boundaries [ 0 , 255 ]
-    r = r.clamp(0, 255);
-    g = g.clamp(0, 255);
-    b = b.clamp(0, 255);
-
-    return 0xff000000 |
-        ((b << 16) & 0xff0000) |
-        ((g << 8) & 0xff00) |
-        (r & 0xff);
-  }
-
-  // static void saveImage(Image image, [int i = 0]) async {
-  //   List<int> jpeg = JpegEncoder().encodeImage(image);
-  //   final appDir = await getTemporaryDirectory();
-  //   final appPath = appDir.path;
-  //   final fileOnDevice = File('$appPath/out$i.jpg');
-  //   await fileOnDevice.writeAsBytes(jpeg, flush: true);
-  //   print('Saved $appPath/out$i.jpg');
-  // }
 }
 
 class Classifier {
@@ -260,18 +161,6 @@ class Classifier {
 
   bool get ready => _interpreter != null && _classificationIsolate != null;
 
-  Classifier();
-
-  Future<void> _loadModel() async {
-    try {
-      _interpreter = await Interpreter.fromAsset(_modelFileName,
-          options: InterpreterOptions()..threads = 4);
-    } catch (e) {
-      print("Error creating interpreter: $e");
-    }
-    print("[] Loaded tensorflow model");
-  }
-
   Future<void> start() async {
     await _loadModel();
 
@@ -284,7 +173,7 @@ class Classifier {
 
     _classificationIsolate = await Isolate.spawn<IsolateStart>(
         ThreadedClassifier.isolateEntry,
-        IsolateStart(_receivePort.sendPort, _interpreter!.address, path));
+        IsolateStart(_receivePort.sendPort, _interpreter!.address));
 
     // After the isolate spawns it will send us back the port we should send information on
     _sendPort = await _receivePort.first;
@@ -314,5 +203,15 @@ class Classifier {
     _sendPort?.send(message);
 
     var _ = await responsePort.first;
+  }
+
+  Future<void> _loadModel() async {
+    try {
+      _interpreter = await Interpreter.fromAsset(_modelFileName,
+          options: InterpreterOptions()..threads = 4);
+    } catch (e) {
+      print("Error creating interpreter: $e");
+    }
+    print("[] Loaded tensorflow model");
   }
 }
