@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 
@@ -16,6 +16,19 @@ class ClassificationRequest {
   final SendPort responsePort;
 
   ClassificationRequest({this.asset, this.image, required this.responsePort});
+}
+
+class ClassificationResult {
+  final Rect rect;
+  final int score;
+  final int bestClassIndex;
+
+  ClassificationResult(this.rect, this.score, this.bestClassIndex);
+
+  @override
+  String toString() {
+    return "{$bestClassIndex: $score%}";
+  }
 }
 
 class IsolateStart {
@@ -61,7 +74,8 @@ class ThreadedClassifier {
     }
   }
 
-  Future<int> _classify(ClassificationRequest request) async {
+  Future<List<ClassificationResult>> _classify(
+      ClassificationRequest request) async {
     Image? image;
     if (request.image != null) {
       image = CameraUtils.convertCameraImage(request.image!);
@@ -73,8 +87,10 @@ class ThreadedClassifier {
     }
 
     if (image == null) {
-      return 0;
+      return [];
     }
+
+    List<ClassificationResult> foundObjects = [];
 
     image = copyResizeCropSquare(image, _inputSize);
     var tensorImage = _createTensorImage(image);
@@ -84,31 +100,63 @@ class ThreadedClassifier {
 
     _interpreter.runForMultipleInputs([tensorImage.buffer], outputs);
 
-    final seenItems = Set<int>();
     var items = output.getShape()![1];
     var members = output.getShape()![2];
     var listData = output.getIntList();
     for (int i = 0; i < items; ++i) {
-      var score = listData[members * i + 4];
-      if (score > 80) {
-        var splat = List.generate(
-            members, (memberIndex) => listData[members * i + memberIndex]);
-        var maxArg = 0, maxValue = 0;
-        for (int c = 5; c < 15; ++c) {
-          if (splat[c] > maxValue) {
-            maxValue = splat[c];
-            maxArg = c - 5;
-          }
-        }
-        seenItems.add(maxArg);
+      var baseIndex = members * i;
+      var score = listData[baseIndex + 4];
+      if (score > 60) {
+        var rect = Rect.fromCenter(
+          center: Offset(listData[baseIndex].toDouble(),
+              listData[baseIndex + 1].toDouble()),
+          width: listData[baseIndex + 2].toDouble(),
+          height: listData[baseIndex + 3].toDouble(),
+        );
+
+        var classes =
+            List.generate(10, (index) => listData[baseIndex + 5 + index]);
+        var bestClass = _findBestIndex(classes);
+
+        var foundObject = ClassificationResult(rect, score, bestClass);
+        _addIfBetter(foundObjects, foundObject);
       }
     }
 
-    for (var seen in seenItems) {
-      print("I see ${_classes[seen]}");
+    return foundObjects;
+  }
+
+  int _findBestIndex(List<int> classScores) {
+    var maxIndex = 0, maxValue = 0;
+    for (int i = 0; i < classScores.length; ++i) {
+      if (classScores[i] > maxValue) {
+        maxValue = classScores[i];
+        maxIndex = i;
+      }
     }
 
-    return seenItems.length;
+    return maxIndex;
+  }
+
+  void _addIfBetter(
+      List<ClassificationResult> objects, ClassificationResult newObject) {
+    bool shouldAdd = true;
+    for (int i = 0; i < objects.length; ++i) {
+      var oldObject = objects[i];
+      if (oldObject.rect.overlaps(newObject.rect)) {
+        shouldAdd = false;
+        if (newObject.score > oldObject.score) {
+          // Remove the lower scoring object
+          objects.removeAt(i);
+          objects.add(newObject);
+        }
+        break;
+      }
+    }
+
+    if (shouldAdd) {
+      objects.add(newObject);
+    }
   }
 
   static void isolateEntry(IsolateStart isoStart) async {
@@ -124,9 +172,9 @@ class ThreadedClassifier {
         print("Recieved classification request, processing... ");
 
         try {
-          var resultCount = await classifier._classify(request);
+          var results = await classifier._classify(request);
 
-          request.responsePort.send(resultCount);
+          request.responsePort.send(results);
         } catch (e) {
           print("Failure running classifier $e");
           request.responsePort.send(0);
@@ -169,8 +217,6 @@ class Classifier {
       _classificationIsolate = null;
     }
 
-    final path = (await getApplicationDocumentsDirectory()).path;
-
     _classificationIsolate = await Isolate.spawn<IsolateStart>(
         ThreadedClassifier.isolateEntry,
         IsolateStart(_receivePort.sendPort, _interpreter!.address));
@@ -184,16 +230,16 @@ class Classifier {
     _classificationIsolate = null;
   }
 
-  Future<void> classify(CameraImage image) async {
+  Future<List<ClassificationResult>> classify(CameraImage image) async {
     var responsePort = ReceivePort();
     var message = ClassificationRequest(
         image: image, responsePort: responsePort.sendPort);
     _sendPort?.send(message);
 
-    var _ = await responsePort.first;
+    return await responsePort.first;
   }
 
-  Future<void> classifyAsset(String asset) async {
+  Future<List<ClassificationResult>> classifyAsset(String asset) async {
     var raw = await rootBundle.load('assets/$asset');
     var imageAsset = decodeImage(raw.buffer.asUint8List());
 
@@ -202,7 +248,7 @@ class Classifier {
         asset: imageAsset, responsePort: responsePort.sendPort);
     _sendPort?.send(message);
 
-    var _ = await responsePort.first;
+    return await responsePort.first;
   }
 
   Future<void> _loadModel() async {

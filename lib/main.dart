@@ -64,7 +64,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
       _classifying = true;
 
-      await _classifier?.classify(cameraImage);
+      var classifications = await _classifier!.classify(cameraImage);
+      print(classifications);
 
       _classifying = false;
     }
@@ -78,7 +79,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
       _classifying = true;
 
-      await _classifier?.classifyAsset('test_image.jpg');
+      var classifications = await _classifier!.classifyAsset('test_image.jpg');
+      print(classifications);
 
       _classifying = false;
     }
