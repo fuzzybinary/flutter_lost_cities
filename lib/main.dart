@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_match/camera_view.dart';
+import 'package:flutter_match/classification_box.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
 void main() {
@@ -45,12 +46,15 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _classifying = false;
   Classifier? _classifier;
 
+  List<ClassificationResult>? _classifications;
+
   void _loadClassifier() async {
     _classifier = Classifier();
     await _classifier?.start();
   }
 
   void _onCameraButtonPressed() {
+    _classifications = null;
     setState(() {
       _isCameraOpen = !_isCameraOpen;
     });
@@ -66,8 +70,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
       var classifications = await _classifier!.classify(cameraImage);
       print(classifications);
-
       _classifying = false;
+
+      setState(() {
+        _classifications = classifications;
+      });
     }
   }
 
@@ -93,24 +100,41 @@ class _MyHomePageState extends State<MyHomePage> {
     _loadClassifier();
   }
 
+  Widget _cameraViewStack(BuildContext context) {
+    final boxes = _classifications?.map((c) {
+      return ClassificationBox(
+        location: c.rect,
+        classification: c,
+      );
+    }).toList();
+
+    return CameraView(
+      onCameraData: _onCameraData,
+      child: Stack(
+        children: boxes ?? [],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title!),
       ),
-      body: Container(
-          child: _isCameraOpen
-              ? CameraView(
-                  onCameraData: _onCameraData,
-                )
-              : Column(children: [
+      body: Center(
+        child: _isCameraOpen
+            ? _cameraViewStack(context)
+            : Column(
+                children: [
                   Text('Camera is Off'),
                   ElevatedButton(
                     child: Text("Try the sample image."),
                     onPressed: _classifySample,
-                  )
-                ])),
+                  ),
+                ],
+              ),
+      ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.camera),
         onPressed: _onCameraButtonPressed,

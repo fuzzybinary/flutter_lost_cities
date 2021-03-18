@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 
@@ -19,7 +20,7 @@ class ClassificationRequest {
 }
 
 class ClassificationResult {
-  final Rect rect;
+  Rect rect;
   final int score;
   final int bestClassIndex;
 
@@ -34,27 +35,18 @@ class ClassificationResult {
 class IsolateStart {
   final SendPort sendPort;
   final int interpeterAddress;
+  final String documentsPath;
 
-  IsolateStart(this.sendPort, this.interpeterAddress);
+  IsolateStart(this.sendPort, this.interpeterAddress, this.documentsPath);
 }
 
 class ThreadedClassifier {
   static const int _inputSize = 416;
+  static const double _quantization = 0.0109202368185;
+  static const double _outputToImageLoc = _inputSize * _quantization;
 
   late Interpreter _interpreter;
-
-  final List<String> _classes = [
-    "num_10",
-    "num_2",
-    "num_3",
-    "num_4",
-    "num_5",
-    "num_6",
-    "num_7",
-    "num_8",
-    "num_9",
-    "num_hand",
-  ];
+  String _documentsPath;
 
   /// Shapes of output tensors
   List<List<int>> _outputShapes = [];
@@ -62,7 +54,7 @@ class ThreadedClassifier {
   /// Types of output tensors
   List<TfLiteType> _outputTypes = [];
 
-  ThreadedClassifier(int interpreterAddress) {
+  ThreadedClassifier(int interpreterAddress, this._documentsPath) {
     _interpreter = Interpreter.fromAddress(interpreterAddress);
 
     var outputTensors = _interpreter.getOutputTensors();
@@ -76,23 +68,23 @@ class ThreadedClassifier {
 
   Future<List<ClassificationResult>> _classify(
       ClassificationRequest request) async {
-    Image? image;
+    Image? originalImage;
     if (request.image != null) {
-      image = CameraUtils.convertCameraImage(request.image!);
+      originalImage = CameraUtils.convertCameraImage(request.image!);
       if (Platform.isAndroid) {
-        image = copyRotate(image!, 90);
+        originalImage = copyRotate(originalImage!, 90);
       }
     } else if (request.asset != null) {
-      image = request.asset;
+      originalImage = request.asset;
     }
 
-    if (image == null) {
+    if (originalImage == null) {
       return [];
     }
 
     List<ClassificationResult> foundObjects = [];
 
-    image = copyResizeCropSquare(image, _inputSize);
+    final image = copyResizeCropSquare(originalImage, _inputSize);
     var tensorImage = _createTensorImage(image);
 
     var output = TensorBufferUint8(_outputShapes[0]);
@@ -108,10 +100,12 @@ class ThreadedClassifier {
       var score = listData[baseIndex + 4];
       if (score > 60) {
         var rect = Rect.fromCenter(
-          center: Offset(listData[baseIndex].toDouble(),
-              listData[baseIndex + 1].toDouble()),
-          width: listData[baseIndex + 2].toDouble(),
-          height: listData[baseIndex + 3].toDouble(),
+          center: Offset(
+            listData[baseIndex] * _outputToImageLoc,
+            listData[baseIndex + 1] * _outputToImageLoc,
+          ),
+          width: listData[baseIndex + 2] * _outputToImageLoc,
+          height: listData[baseIndex + 3] * _outputToImageLoc,
         );
 
         var classes =
@@ -121,6 +115,12 @@ class ThreadedClassifier {
         var foundObject = ClassificationResult(rect, score, bestClass);
         _addIfBetter(foundObjects, foundObject);
       }
+    }
+
+    for (var foundObject in foundObjects) {
+      // Translate the boxes to camera-image coordinates
+      foundObject.rect =
+          _uncropRect(foundObject.rect, originalImage, _inputSize);
     }
 
     return foundObjects;
@@ -138,25 +138,59 @@ class ThreadedClassifier {
     return maxIndex;
   }
 
-  void _addIfBetter(
+  bool _addIfBetter(
       List<ClassificationResult> objects, ClassificationResult newObject) {
-    bool shouldAdd = true;
     for (int i = 0; i < objects.length; ++i) {
       var oldObject = objects[i];
       if (oldObject.rect.overlaps(newObject.rect)) {
-        shouldAdd = false;
         if (newObject.score > oldObject.score) {
           // Remove the lower scoring object
           objects.removeAt(i);
           objects.add(newObject);
+          // Did add
+          return true;
         }
-        break;
+        return false;
       }
     }
 
-    if (shouldAdd) {
-      objects.add(newObject);
+    objects.add(newObject);
+
+    return true;
+  }
+
+  Rect _uncropRect(Rect inputRect, Image originalImage, int inputImageSize) {
+    var scale = 1.0;
+    var offset = Offset.zero;
+    if (originalImage.width < originalImage.height) {
+      scale = originalImage.width / inputImageSize;
+      var offsetY = (originalImage.height / scale - inputImageSize) * 0.5;
+      offset = Offset(0, offsetY);
+    } else {
+      scale = originalImage.height / inputImageSize;
+      var offsetX = (originalImage.width / scale - inputImageSize) * 0.5;
+      offset = Offset(offsetX, 0);
     }
+
+    var uncropped = Rect.fromLTRB(
+      (inputRect.left + offset.dx) * scale,
+      (inputRect.top + offset.dy) * scale,
+      (inputRect.right + offset.dx) * scale,
+      (inputRect.bottom + offset.dy) * scale,
+    );
+    // Not sure this is necessary since the camera preview should also rotate
+    // the view of the camera.
+    // if (Platform.isAndroid) {
+    //   // Unrotate - this is a simplification of multiplication by a 2D rotation matrix
+    //   // with the result [ x cos θ - y sin θ, x sin θ + y cos θ ]
+    //   uncropped = Rect.fromLTRB(
+    //       uncropped.top,
+    //       originalImage.width - uncropped.left,
+    //       uncropped.bottom,
+    //       originalImage.width - uncropped.right);
+    // }
+
+    return uncropped;
   }
 
   static void isolateEntry(IsolateStart isoStart) async {
@@ -165,7 +199,8 @@ class ThreadedClassifier {
     final port = ReceivePort();
     isoStart.sendPort.send(port.sendPort);
 
-    var classifier = ThreadedClassifier(isoStart.interpeterAddress);
+    var classifier =
+        ThreadedClassifier(isoStart.interpeterAddress, isoStart.documentsPath);
 
     await for (final ClassificationRequest? request in port) {
       if (request != null) {
@@ -217,9 +252,12 @@ class Classifier {
       _classificationIsolate = null;
     }
 
+    var documentsDir = await getApplicationDocumentsDirectory();
+
     _classificationIsolate = await Isolate.spawn<IsolateStart>(
         ThreadedClassifier.isolateEntry,
-        IsolateStart(_receivePort.sendPort, _interpreter!.address));
+        IsolateStart(
+            _receivePort.sendPort, _interpreter!.address, documentsDir.path));
 
     // After the isolate spawns it will send us back the port we should send information on
     _sendPort = await _receivePort.first;

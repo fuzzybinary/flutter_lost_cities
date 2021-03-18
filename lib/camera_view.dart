@@ -1,12 +1,15 @@
 import 'package:camera/camera.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 
 typedef void OnCameraData(CameraImage cameraData);
 
 class CameraView extends StatefulWidget {
   final OnCameraData onCameraData;
+  final Widget? child;
 
-  CameraView({Key? key, required this.onCameraData}) : super(key: key);
+  CameraView({Key? key, required this.onCameraData, this.child})
+      : super(key: key);
 
   @override
   State<StatefulWidget> createState() => _CameraViewState();
@@ -75,18 +78,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_cameraController == null) {
-      return Container();
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return CircularProgressIndicator();
     }
 
-    var cameraController = _cameraController!;
-    if (!cameraController.value.isInitialized) {
-      return Container();
-    }
-
-    return AspectRatio(
-      aspectRatio: cameraController.value.aspectRatio,
-      child: CameraPreview(cameraController),
-    );
+    //return CameraPlatform.instance.buildPreview(_cameraController!.cameraId);
+    return CameraPreview(_cameraController!, child: widget.child);
   }
 }
