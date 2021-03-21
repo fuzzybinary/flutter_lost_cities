@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_match/scoring_screen/scoring_bloc.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
 import '../camera_view.dart';
@@ -11,6 +12,8 @@ class ScoringScreen extends StatefulWidget {
 }
 
 class _ScoringState extends State<ScoringScreen> {
+  ScoringBloc _bloc = ScoringBloc();
+
   bool _classifying = false;
   Classifier? _classifier;
 
@@ -33,9 +36,11 @@ class _ScoringState extends State<ScoringScreen> {
       print(classifications);
       _classifying = false;
 
-      setState(() {
-        _classifications = classifications;
-      });
+      if (mounted) {
+        setState(() {
+          _bloc.setClassifications(classifications);
+        });
+      }
     }
   }
 
@@ -61,19 +66,39 @@ class _ScoringState extends State<ScoringScreen> {
     _loadClassifier();
   }
 
+  void todo() {}
+
+  Widget _scoringButton(String score, bool isOn) {
+    return ElevatedButton(
+      onPressed: todo,
+      child: Text(score),
+      style: ElevatedButton.styleFrom(
+          primary: Colors.blueAccent.withOpacity(isOn ? 1.0 : 0.4)),
+    );
+  }
+
   Widget _cameraViewStack(BuildContext context) {
     final boxes = _classifications?.map((c) {
-      return ClassificationBox(
-        location: c.rect,
-        classification: c,
-      );
-    }).toList();
+          return ClassificationBox(
+            location: c.rect,
+            classification: c,
+          );
+        }).toList() ??
+        [];
 
     return CameraView(
       onCameraData: _onCameraData,
-      child: Stack(
-        children: boxes ?? [],
-      ),
+      child: Stack(children: [
+        ...boxes,
+        Container(
+          alignment: Alignment.topRight,
+          child: Column(children: [
+            for (var i = 0; i < _bloc.enabledCards.length; ++i)
+              _scoringButton(
+                  i < 3 ? "H" : (i - 1).toString(), _bloc.enabledCards[i])
+          ]),
+        )
+      ]),
     );
   }
 
@@ -81,7 +106,12 @@ class _ScoringState extends State<ScoringScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(),
-      body: Center(child: _cameraViewStack(context)),
+      body: Center(
+        child: Column(children: [
+          Text("Current Score: ${_bloc.currentScore}"),
+          _cameraViewStack(context)
+        ]),
+      ),
       // floatingActionButton: FloatingActionButton(
       //   child: const Icon(Icons.camera),
       //   onPressed: _onCameraButtonPressed,

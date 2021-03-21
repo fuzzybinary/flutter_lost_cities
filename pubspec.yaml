@@ -30,9 +30,8 @@ dependencies:
   path_provider: ^2.0.1
   tflite_flutter:
     path: ../tflite_flutter_plugin
-  tflite_flutter_helper:
-    path: ../tflite_flutter_helper
-
+  pedantic: ^1.11.0
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

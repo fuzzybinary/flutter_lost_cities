@@ -180,7 +180,7 @@ packages:
     source: hosted
     version: "2.0.0"
   pedantic:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: pedantic
       url: "https://pub.dartlang.org"
@@ -282,13 +282,6 @@ packages:
       relative: true
     source: path
     version: "0.6.0"
-  tflite_flutter_helper:
-    dependency: "direct main"
-    description:
-      path: "../tflite_flutter_helper"
-      relative: true
-    source: path
-    version: "0.1.2"
   typed_data:
     dependency: transitive
     description:

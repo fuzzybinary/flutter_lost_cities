@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -7,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 
 import 'camera_utils.dart';
 
@@ -68,6 +68,9 @@ class ThreadedClassifier {
 
   Future<List<ClassificationResult>> _classify(
       ClassificationRequest request) async {
+    final stopwatch = Stopwatch();
+    stopwatch.start();
+
     Image? originalImage;
     if (request.image != null) {
       originalImage = CameraUtils.convertCameraImage(request.image!);
@@ -87,29 +90,40 @@ class ThreadedClassifier {
     final image = copyResizeCropSquare(originalImage, _inputSize);
     var tensorImage = _createTensorImage(image);
 
-    var output = TensorBufferUint8(_outputShapes[0]);
-    var outputs = {0: output.buffer};
+    print(
+        "Prep time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
+    stopwatch.reset();
 
-    _interpreter.runForMultipleInputs([tensorImage.buffer], outputs);
+    final outputTensor = _interpreter.getOutputTensor(0);
+    final outputShape = outputTensor.shape;
+    final outputSize =
+        outputShape.fold<int>(1, (value, element) => value * element);
+    var output = Uint8List(outputSize);
+    var outputs = {0: output};
 
-    var items = output.getShape()![1];
-    var members = output.getShape()![2];
-    var listData = output.getIntList();
+    _interpreter.runForMultipleInputs([tensorImage], outputs);
+
+    print(
+        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)} / ${_interpreter.lastNativeInferenceDurationMicroSeconds}us");
+    stopwatch.reset();
+
+    var items = outputShape[1];
+    var members = outputShape[2];
     for (int i = 0; i < items; ++i) {
       var baseIndex = members * i;
-      var score = listData[baseIndex + 4];
-      if (score > 60) {
+      var score = output[baseIndex + 4];
+      if (score > 80) {
         var rect = Rect.fromCenter(
           center: Offset(
-            listData[baseIndex] * _outputToImageLoc,
-            listData[baseIndex + 1] * _outputToImageLoc,
+            output[baseIndex] * _outputToImageLoc,
+            output[baseIndex + 1] * _outputToImageLoc,
           ),
-          width: listData[baseIndex + 2] * _outputToImageLoc,
-          height: listData[baseIndex + 3] * _outputToImageLoc,
+          width: output[baseIndex + 2] * _outputToImageLoc,
+          height: output[baseIndex + 3] * _outputToImageLoc,
         );
 
         var classes =
-            List.generate(10, (index) => listData[baseIndex + 5 + index]);
+            List.generate(10, (index) => output[baseIndex + 5 + index]);
         var bestClass = _findBestIndex(classes);
 
         var foundObject = ClassificationResult(rect, score, bestClass);
@@ -123,7 +137,25 @@ class ThreadedClassifier {
           _uncropRect(foundObject.rect, originalImage, _inputSize);
     }
 
+    print(
+        "Postprocessing Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
+    stopwatch.reset();
+
     return foundObjects;
+  }
+
+  static Uint8List _createTensorImage(Image image) {
+    var buffer = Uint8List(image.width * image.height * 3);
+    var imageData = image.data;
+    for (int i = 0; i < imageData.length; ++i) {
+      var pixelValue = imageData[i];
+      var writeIndex = i * 3;
+      buffer[writeIndex] = (pixelValue & 0xff);
+      buffer[writeIndex + 1] = ((pixelValue >> 8) & 0xff);
+      buffer[writeIndex + 2] = ((pixelValue >> 16) & 0xff);
+    }
+
+    return buffer;
   }
 
   int _findBestIndex(List<int> classScores) {
@@ -208,28 +240,13 @@ class ThreadedClassifier {
 
         try {
           var results = await classifier._classify(request);
-
           request.responsePort.send(results);
         } catch (e) {
           print("Failure running classifier $e");
-          request.responsePort.send(0);
+          request.responsePort.send(<ClassificationResult>[]);
         }
       }
     }
-  }
-
-  static TensorBufferUint8 _createTensorImage(Image image) {
-    var tensorBuffer = TensorBufferUint8([1, image.width, image.height, 3]);
-    var imageData = image.data;
-    for (int i = 0; i < imageData.length; ++i) {
-      var pixelValue = imageData[i];
-      var writeIndex = i * 3;
-      tensorBuffer.byteData.setUint8(writeIndex, pixelValue & 0xff);
-      tensorBuffer.byteData.setUint8(writeIndex + 1, (pixelValue >> 8) & 0xff);
-      tensorBuffer.byteData.setUint8(writeIndex + 2, (pixelValue >> 16) & 0xff);
-    }
-
-    return tensorBuffer;
   }
 }
 
@@ -291,8 +308,9 @@ class Classifier {
 
   Future<void> _loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset(_modelFileName,
-          options: InterpreterOptions()..threads = 4);
+      final options = InterpreterOptions()..threads = 4;
+      _interpreter =
+          await Interpreter.fromAsset(_modelFileName, options: options);
     } catch (e) {
       print("Error creating interpreter: $e");
     }

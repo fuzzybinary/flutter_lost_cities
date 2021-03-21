@@ -31,11 +31,12 @@ class CameraUtils {
 
     final image = Image(width, height);
 
-    for (int x = 0; x < width; x++) {
-      for (int y = 0; y < height; y++) {
-        final int uvIndex =
-            uvPixelStride * (x / 2).floor() + uvRowStride * (y / 2).floor();
-        final int index = y * pixelStride + x;
+    for (int y = 0; y < height; y++) {
+      final yUvIndex = uvRowStride * (y / 2).floor();
+      final yPixelIndex = y * pixelStride;
+      for (int x = 0; x < width; x++) {
+        final int uvIndex = uvPixelStride * (x / 2).floor() + yUvIndex;
+        final int index = yPixelIndex + x;
 
         final yp = cameraImage.planes[0].bytes[index];
         final up = cameraImage.planes[1].bytes[uvIndex];
