@@ -7,9 +7,9 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'camera_utils.dart';
+import 'tflite_plugin.dart';
 
 class ClassificationRequest {
   final Image? asset;
@@ -45,25 +45,26 @@ class ThreadedClassifier {
   static const double _quantization = 0.0109202368185;
   static const double _outputToImageLoc = _inputSize * _quantization;
 
-  late Interpreter _interpreter;
+  late TFLiteInterpreter _interpreter;
   String _documentsPath;
 
   /// Shapes of output tensors
   List<List<int>> _outputShapes = [];
 
   /// Types of output tensors
-  List<TfLiteType> _outputTypes = [];
+  List<TFLiteDataType> _outputTypes = [];
 
   ThreadedClassifier(int interpreterAddress, this._documentsPath) {
-    _interpreter = Interpreter.fromAddress(interpreterAddress);
+    _interpreter = TFLiteInterpreter.fromId(interpreterAddress);
 
-    var outputTensors = _interpreter.getOutputTensors();
-    if (outputTensors != null) {
-      outputTensors.forEach((tensor) {
-        _outputShapes.add(tensor.shape);
-        _outputTypes.add(tensor.type);
-      });
-    }
+    _interpreter.getOutputTensors().then((value) {
+      if (value != null) {
+        value.forEach((tensor) {
+          _outputShapes.add(tensor.shape);
+          _outputTypes.add(tensor.dataType);
+        });
+      }
+    });
   }
 
   Future<List<ClassificationResult>> _classify(
@@ -94,17 +95,15 @@ class ThreadedClassifier {
         "Prep time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
-    final outputTensor = _interpreter.getOutputTensor(0);
-    final outputShape = outputTensor.shape;
+    final outputShape = _outputShapes[0];
     final outputSize =
         outputShape.fold<int>(1, (value, element) => value * element);
     var output = Uint8List(outputSize);
-    var outputs = {0: output};
 
-    _interpreter.runForMultipleInputs([tensorImage], outputs);
+    _interpreter.run(tensorImage, output);
 
     print(
-        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)} / ${_interpreter.lastNativeInferenceDurationMicroSeconds}us");
+        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
     var items = outputShape[1];
@@ -251,7 +250,7 @@ class ThreadedClassifier {
 }
 
 class Classifier {
-  Interpreter? _interpreter;
+  TFLiteInterpreter? _interpreter;
 
   static const String _modelFileName = "best-int8.tflite";
 
@@ -274,7 +273,7 @@ class Classifier {
     _classificationIsolate = await Isolate.spawn<IsolateStart>(
         ThreadedClassifier.isolateEntry,
         IsolateStart(
-            _receivePort.sendPort, _interpreter!.address, documentsDir.path));
+            _receivePort.sendPort, _interpreter!.nativeId, documentsDir.path));
 
     // After the isolate spawns it will send us back the port we should send information on
     _sendPort = await _receivePort.first;
@@ -308,9 +307,11 @@ class Classifier {
 
   Future<void> _loadModel() async {
     try {
-      final options = InterpreterOptions()..threads = 4;
+      final options = TFLiteInterpreterOptions()
+        ..numThreads = 4
+        ..useNNAPIOnAnrdoid = true;
       _interpreter =
-          await Interpreter.fromAsset(_modelFileName, options: options);
+          await TFLiteInterpreter.fromAsset(_modelFileName, options: options);
     } catch (e) {
       print("Error creating interpreter: $e");
     }
