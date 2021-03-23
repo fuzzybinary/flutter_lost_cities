@@ -7,6 +7,10 @@ import '../camera_view.dart';
 import '../classification_box.dart';
 
 class ScoringScreen extends StatefulWidget {
+  final Classifier classifier;
+
+  ScoringScreen(this.classifier);
+
   @override
   State<StatefulWidget> createState() => _ScoringState();
 }
@@ -15,24 +19,18 @@ class _ScoringState extends State<ScoringScreen> {
   ScoringBloc _bloc = ScoringBloc();
 
   bool _classifying = false;
-  Classifier? _classifier;
 
   List<ClassificationResult>? _classifications;
 
-  void _loadClassifier() async {
-    _classifier = Classifier();
-    await _classifier?.start();
-  }
-
   void _onCameraData(CameraImage cameraImage) async {
-    if (_classifier != null && _classifier!.ready) {
+    if (widget.classifier.ready) {
       if (_classifying) {
         return;
       }
 
       _classifying = true;
 
-      var classifications = await _classifier!.classify(cameraImage);
+      var classifications = await widget.classifier.classify(cameraImage);
       print(classifications);
       _classifying = false;
 
@@ -45,25 +43,19 @@ class _ScoringState extends State<ScoringScreen> {
   }
 
   void _classifySample() async {
-    if (_classifier != null && _classifier!.ready) {
+    if (widget.classifier.ready) {
       if (_classifying) {
         return;
       }
 
       _classifying = true;
 
-      var classifications = await _classifier!.classifyAsset('test_image.jpg');
+      var classifications =
+          await widget.classifier.classifyAsset('test_image.jpg');
       print(classifications);
 
       _classifying = false;
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    _loadClassifier();
   }
 
   void todo() {}

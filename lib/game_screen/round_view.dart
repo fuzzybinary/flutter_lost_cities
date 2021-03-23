@@ -30,11 +30,34 @@ typedef ScoreCallback = void Function(int player, int expidition);
 
 @immutable
 class RoundView extends StatelessWidget {
+  final int roundNumber;
   final GameRound round;
   final ScoreCallback onScoreRequested;
 
-  RoundView({Key? key, required this.round, required this.onScoreRequested})
+  RoundView(
+      {Key? key,
+      required this.roundNumber,
+      required this.round,
+      required this.onScoreRequested})
       : super(key: key);
+
+  Widget _buildPlayerScore(
+      {required ThemeData theme,
+      required int playerNumber,
+      required int score}) {
+    return Container(
+      padding: EdgeInsets.all(5),
+      child: Column(
+        children: [
+          Text("Player $playerNumber"),
+          Text(
+            score.toString(),
+            style: theme.textTheme.headline3,
+          )
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,17 +69,25 @@ class RoundView extends StatelessWidget {
       Colors.redAccent
     ];
 
+    final theme = Theme.of(context);
+
     return Container(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text("Round $roundNumber", style: theme.textTheme.headline4),
           Container(
               padding: EdgeInsets.fromLTRB(8, 0, 30, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Player 1 - Total Score: ${round.player1Score}"),
                   Row(
                     children: [
+                      _buildPlayerScore(
+                        theme: theme,
+                        playerNumber: 1,
+                        score: round.player1Score,
+                      ),
                       for (int i = 0; i < 5; ++i)
                         RoundButton(
                           color: expiditionColors[i],
@@ -72,7 +103,6 @@ class RoundView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text("Player 2 - Total Score: ${round.player2Score}"),
                   Row(
                     children: [
                       for (int i = 0; i < 5; ++i)
@@ -80,7 +110,12 @@ class RoundView extends StatelessWidget {
                           color: expiditionColors[i],
                           score: round.player2Scores[i],
                           onPressed: () => onScoreRequested(1, i),
-                        )
+                        ),
+                      _buildPlayerScore(
+                        theme: theme,
+                        playerNumber: 2,
+                        score: round.player2Score,
+                      ),
                     ],
                   ),
                 ],
