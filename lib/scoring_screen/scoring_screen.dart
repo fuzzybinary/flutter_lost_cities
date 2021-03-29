@@ -42,6 +42,8 @@ class _ScoringState extends State<ScoringScreen> {
     }
   }
 
+  // Unused for now until I need to test the classifier again
+  // ignore: unused_element
   void _classifySample() async {
     if (widget.classifier.ready) {
       if (_classifying) {

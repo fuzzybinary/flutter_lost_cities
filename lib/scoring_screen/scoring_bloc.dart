@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_match/tflite/classifier.dart';
 
 class ScoringBloc {
@@ -7,6 +9,9 @@ class ScoringBloc {
 
   int _currentScore = 0;
   int get currentScore => _currentScore;
+
+  int totalCards = 0;
+  bool get hasTwentyPointBonus => totalCards >= 8;
 
   void setClassifications(List<ClassificationResult> classifications) {
     _enabledCards = List.filled(12, false);
@@ -33,9 +38,17 @@ class ScoringBloc {
       }
     }
 
-    // TODO: Hands
+    numHands = min((numHands / 2.0).ceil(), 3);
+    for (int i = 0; i < numHands; ++i) {
+      _enabledCards[i] = true;
+    }
+
+    totalCards = _enabledCards.where((e) => e).length;
     if (baseScore > 0) {
-      _currentScore = (baseScore - 20);
+      _currentScore = (baseScore - 20) * numHands;
+      if (hasTwentyPointBonus) {
+        _currentScore += 20;
+      }
     } else {
       _currentScore = 0;
     }

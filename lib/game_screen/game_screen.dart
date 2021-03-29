@@ -24,35 +24,44 @@ class _GameScreenState extends State<GameScreen> {
     }));
   }
 
+  void _addRound() {}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPersistentHeader(
-              delegate: GameScreenAppBar(expandedHeight: 200),
-              pinned: true,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addRound,
+        child: Icon(Icons.add),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          SliverPersistentHeader(
+            delegate: GameScreenAppBar(expandedHeight: 200),
+            pinned: true,
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                return Column(
+                  children: [
+                    RoundView(
+                      roundNumber: index,
+                      round: _bloc.rounds[index],
+                      onScoreRequested: (p, e) =>
+                          _onRequestScore(context, p, e),
+                    ),
+                    if (index != _bloc.rounds.length - 1)
+                      Divider(
+                        color: Colors.black54,
+                        thickness: 1,
+                      ),
+                  ],
+                );
+              },
+              childCount: _bloc.rounds.length,
             ),
-            // Create a SliverList.
-            SliverList(
-              // Use a delegate to build items as they're scrolled on screen.
-              delegate: SliverChildBuilderDelegate(
-                // The builder function returns a ListTile with a title that
-                // displays the index of the current item.
-                (context, index) {
-                  return RoundView(
-                    roundNumber: index,
-                    round: _bloc.rounds[index],
-                    onScoreRequested: (p, e) => _onRequestScore(context, p, e),
-                  );
-                },
-                // Builds 1000 ListTiles
-                childCount: _bloc.rounds.length,
-              ),
-            )
-          ],
-        ),
+          )
+        ],
       ),
     );
   }

@@ -46,6 +46,7 @@ class ThreadedClassifier {
   static const double _outputToImageLoc = _inputSize * _quantization;
 
   late Interpreter _interpreter;
+  // ignore: unused_field
   String _documentsPath;
 
   /// Shapes of output tensors
