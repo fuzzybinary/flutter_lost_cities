@@ -18,25 +18,62 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   GameScreenBloc _bloc = GameScreenBloc();
 
-  void _onRequestScore(BuildContext context, int player, int expidition) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) {
-      return ScoringScreen(widget.classifier);
-    }));
+  void _onRequestScore(BuildContext context, int player, int expidition) async {
+    var scoringResult = await Navigator.push<ScoringResult>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) {
+          return ScoringScreen(widget.classifier);
+        },
+      ),
+    );
+    if (scoringResult != null) {
+      // TODO:
+    }
   }
 
-  void _addRound() {}
+  void _addRound(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Finish this round and start a new round?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text("No"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text("Yes"),
+            ),
+          ],
+        );
+      },
+    );
+    if (result == true) {
+      setState(() {
+        _bloc.addRound();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed: _addRound,
+        onPressed: () => _addRound(context),
         child: Icon(Icons.add),
       ),
       body: CustomScrollView(
         slivers: [
           SliverPersistentHeader(
-            delegate: GameScreenAppBar(expandedHeight: 200),
+            delegate: GameScreenAppBar(
+              expandedHeight: 200,
+              player1Score: _bloc.player1Score,
+              player2Score: _bloc.player2Score,
+            ),
             pinned: true,
           ),
           SliverList(

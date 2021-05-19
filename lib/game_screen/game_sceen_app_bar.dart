@@ -4,8 +4,14 @@ import 'package:flutter/material.dart';
 
 class GameScreenAppBar extends SliverPersistentHeaderDelegate {
   final double expandedHeight;
+  final int player1Score;
+  final int player2Score;
 
-  GameScreenAppBar({required this.expandedHeight});
+  GameScreenAppBar({
+    required this.expandedHeight,
+    required this.player1Score,
+    required this.player2Score,
+  });
 
   Widget _playerScore(ThemeData theme, TextStyle? style, int playerNumber,
       int score, double collapsedPercent) {
@@ -65,11 +71,13 @@ class GameScreenAppBar extends SliverPersistentHeaderDelegate {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _playerScore(theme, scoreTextStyle, 1, 100, collapsedPercent),
+                  _playerScore(
+                      theme, scoreTextStyle, 1, player1Score, collapsedPercent),
                   Text("-",
                       style: theme.textTheme.headline3!
                           .copyWith(color: Colors.white)),
-                  _playerScore(theme, scoreTextStyle, 2, 450, collapsedPercent),
+                  _playerScore(
+                      theme, scoreTextStyle, 2, player2Score, collapsedPercent),
                 ],
               ),
             ),

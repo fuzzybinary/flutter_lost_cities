@@ -1,8 +1,15 @@
 import 'dart:math';
 
+import 'package:flutter_match/models/game_round.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
 class ScoringBloc {
+  List<int?> _classifiedScores =
+      List.filled(ExpiditionColorIndex.values.length, null);
+
+  ExpiditionColorIndex _currentExpidition = ExpiditionColorIndex.Yellow;
+  ExpiditionColorIndex get currentExpidition => _currentExpidition;
+
   // This is 3 hands + 9 number cards
   List<bool> _enabledCards = List.filled(12, false);
   List<bool> get enabledCards => _enabledCards;
@@ -12,6 +19,25 @@ class ScoringBloc {
 
   int totalCards = 0;
   bool get hasTwentyPointBonus => totalCards >= 8;
+
+  void prevExpidition() {
+    var expiditionIndex = _currentExpidition.index - 1;
+    if (expiditionIndex < 0) {
+      expiditionIndex = ExpiditionColorIndex.values.length - 1;
+    }
+    _currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
+  }
+
+  void nextExpidition(bool didConfirmScore) {
+    if (didConfirmScore) {
+      _classifiedScores[_currentExpidition.index] = _currentScore;
+    }
+    var expiditionIndex = _currentExpidition.index + 1;
+    if (expiditionIndex >= ExpiditionColorIndex.values.length) {
+      expiditionIndex = 0;
+    }
+    _currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
+  }
 
   void setClassifications(List<ClassificationResult> classifications) {
     _enabledCards = List.filled(12, false);

@@ -10,11 +10,16 @@ class RoundButton extends StatelessWidget {
   final Color color;
   final int score;
   final Function() onPressed;
+  final bool enabled;
 
   void todo() {}
 
-  RoundButton(
-      {required this.color, required this.score, required this.onPressed});
+  RoundButton({
+    required this.color,
+    required this.score,
+    required this.onPressed,
+    this.enabled = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +27,12 @@ class RoundButton extends StatelessWidget {
       constraints: BoxConstraints(minWidth: 80),
       padding: const EdgeInsets.only(left: 4.0, right: 4.0),
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(primary: color),
-        onPressed: onPressed,
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+            return this.color;
+          }),
+        ),
+        onPressed: enabled ? onPressed : null,
         child: Text(
           score.toString(),
         ),
@@ -36,34 +45,26 @@ class RoundDetails extends StatelessWidget {
   final GameRound round;
   final ScoreCallback onScoreRequested;
 
-  final List<String> colors = ["Yellow", "Blue", "White", "Green", "Red"];
-
-  final List<Color> expiditionColors = [
-    Colors.yellow.shade600,
-    Colors.blueAccent,
-    Colors.grey,
-    Colors.green,
-    Colors.redAccent
-  ];
-
   RoundDetails({Key? key, required this.round, required this.onScoreRequested})
       : super(key: key);
 
   Widget _expiditionRow(int expiditionIndex) {
     return Row(
       children: [
-        Text(colors[expiditionIndex]),
+        Text(expiditionColorNames[expiditionIndex]),
         Expanded(
           child: Container(),
         ),
         RoundButton(
           color: expiditionColors[expiditionIndex],
           score: round.player1Scores[expiditionIndex],
+          enabled: !round.isComplete,
           onPressed: () => onScoreRequested(0, expiditionIndex),
         ),
         RoundButton(
           color: expiditionColors[expiditionIndex],
           score: round.player2Scores[expiditionIndex],
+          enabled: !round.isComplete,
           onPressed: () => onScoreRequested(1, expiditionIndex),
         ),
       ],
@@ -72,8 +73,6 @@ class RoundDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: EdgeInsets.only(left: 15, right: 5),
       child: Column(
@@ -103,6 +102,22 @@ class RoundView extends StatefulWidget {
 class _RoundViewState extends State<RoundView> {
   bool _expanded = false;
 
+  @override
+  void initState() {
+    super.initState();
+
+    _expanded = !widget.round.isComplete;
+    widget.round.isCompleteStream.listen((isComplete) {
+      // This is switching from incomplete to complete,
+      // close it up.
+      if (isComplete) {
+        setState(() {
+          _expanded = false;
+        });
+      }
+    });
+  }
+
   void _onExpand() {
     setState(() {
       _expanded = !_expanded;
@@ -121,37 +136,45 @@ class _RoundViewState extends State<RoundView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    var theme = Theme.of(context);
+    if (widget.round.isComplete) {
+      final textTheme = theme.textTheme
+          .apply(bodyColor: Colors.grey, displayColor: Colors.grey);
+      theme = theme.copyWith(textTheme: textTheme);
+    }
 
-    return Container(
-      padding: EdgeInsets.only(left: 6, right: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: _onExpand,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Text(
-                  "Round ${widget.roundNumber}",
-                  style: theme.textTheme.headline5,
-                ),
-                Expanded(child: Container()),
-                _scoreWidget(theme, widget.round.player1Score.toString()),
-                _scoreWidget(theme, "-"),
-                _scoreWidget(theme, widget.round.player2Score.toString())
-              ],
+    return Theme(
+      data: theme,
+      child: Container(
+        padding: EdgeInsets.only(left: 6, right: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: _onExpand,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  Text(
+                    "Round ${widget.roundNumber}",
+                    style: theme.textTheme.headline5,
+                  ),
+                  Expanded(child: Container()),
+                  _scoreWidget(theme, widget.round.player1Score.toString()),
+                  _scoreWidget(theme, "-"),
+                  _scoreWidget(theme, widget.round.player2Score.toString())
+                ],
+              ),
             ),
-          ),
-          ExpandingSection(
-            expand: _expanded,
-            child: RoundDetails(
-              round: widget.round,
-              onScoreRequested: widget.onScoreRequested,
-            ),
-          ),
-        ],
+            ExpandingSection(
+              expand: _expanded,
+              child: RoundDetails(
+                round: widget.round,
+                onScoreRequested: widget.onScoreRequested,
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
