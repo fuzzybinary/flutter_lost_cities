@@ -31,7 +31,7 @@ class _ScoringState extends State<ScoringScreen>
 
   // TODO: This is set to true for now to essentially disable the classifier
   // while I work on the UI
-  bool _classifying = true;
+  bool _classifying = false;
 
   @override
   void didChangeDependencies() {

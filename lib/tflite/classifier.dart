@@ -59,12 +59,10 @@ class ThreadedClassifier {
     _interpreter = Interpreter.fromAddress(interpreterAddress);
 
     var outputTensors = _interpreter.getOutputTensors();
-    if (outputTensors != null) {
-      outputTensors.forEach((tensor) {
-        _outputShapes.add(tensor.shape);
-        _outputTypes.add(tensor.type);
-      });
-    }
+    outputTensors.forEach((tensor) {
+      _outputShapes.add(tensor.shape);
+      _outputTypes.add(tensor.type);
+    });
   }
 
   Future<List<ClassificationResult>> _classify(
