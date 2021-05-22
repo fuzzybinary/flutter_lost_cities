@@ -56,42 +56,39 @@ class _ScoringState extends State<ScoringScreen>
   }
 
   void _onCameraData(CameraImage cameraImage) async {
-    if (widget.classifier.ready) {
-      if (_classifying) {
-        return;
-      }
+    if (_classifying) {
+      return;
+    }
 
-      _classifying = true;
+    _classifying = true;
 
-      var classifications = await widget.classifier.classify(cameraImage);
-      print(classifications);
-      _classifying = false;
+    var classifications = await widget.classifier.classify(cameraImage);
+    print(classifications);
+    _classifying = false;
 
-      if (mounted) {
-        setState(() {
-          _bloc.setClassifications(classifications);
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _bloc.setClassifications(classifications);
+      });
     }
   }
 
   // Unused for now until I need to test the classifier again
   // ignore: unused_element
-  void _classifySample() async {
-    if (widget.classifier.ready) {
-      if (_classifying) {
-        return;
-      }
+  // void _classifySample() async {
 
-      _classifying = true;
+  //   if (_classifying) {
+  //     return;
+  //   }
 
-      var classifications =
-          await widget.classifier.classifyAsset('test_image.jpg');
-      print(classifications);
+  //   _classifying = true;
 
-      _classifying = false;
-    }
-  }
+  //   var classifications =
+  //       await widget.classifier.classifyAsset('test_image.jpg');
+  //   print(classifications);
+
+  //   _classifying = false;
+  // }
 
   void todo() {}
 

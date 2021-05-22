@@ -4,24 +4,27 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_match/tflite/pytorch.dart';
 import 'package:image/image.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'camera_utils.dart';
 
-class ClassificationRequest {
-  final Image? asset;
-  final CameraImage? image;
-  final SendPort responsePort;
+class ImageProcessRequest {
+  CameraImage image;
+  SendPort port;
 
-  ClassificationRequest({this.asset, this.image, required this.responsePort});
+  ImageProcessRequest(this.image, this.port);
+}
+
+class ImageProcessResponse {
+  Int32List imageData;
+
+  ImageProcessResponse(this.imageData);
 }
 
 class ClassificationResult {
   Rect rect;
-  final int score;
+  final double score;
   final int bestClassIndex;
 
   ClassificationResult(this.rect, this.score, this.bestClassIndex);
@@ -32,108 +35,129 @@ class ClassificationResult {
   }
 }
 
-class IsolateStart {
-  final SendPort sendPort;
-  final int interpeterAddress;
-  final String documentsPath;
-
-  IsolateStart(this.sendPort, this.interpeterAddress, this.documentsPath);
-}
-
-class ThreadedClassifier {
+class Classifier {
   static const int _inputSize = 416;
+  PyTorchModule? _pyTorchModule;
+
+  Isolate? _isolate;
+  late SendPort _processingPort;
+
   static const double _quantization = 0.0109202368185;
   static const double _outputToImageLoc = _inputSize * _quantization;
 
-  late Interpreter _interpreter;
   // ignore: unused_field
-  String _documentsPath;
+  //String _documentsPath;
 
-  /// Shapes of output tensors
-  List<List<int>> _outputShapes = [];
+  Classifier();
 
-  /// Types of output tensors
-  List<TfLiteType> _outputTypes = [];
+  void start() async {
+    ReceivePort responsePort = ReceivePort();
+    _isolate =
+        await Isolate.spawn<SendPort>(processingThread, responsePort.sendPort);
 
-  ThreadedClassifier(int interpreterAddress, this._documentsPath) {
-    _interpreter = Interpreter.fromAddress(interpreterAddress);
+    _processingPort = await responsePort.first;
 
-    var outputTensors = _interpreter.getOutputTensors();
-    outputTensors.forEach((tensor) {
-      _outputShapes.add(tensor.shape);
-      _outputTypes.add(tensor.type);
-    });
+    _pyTorchModule =
+        await PyTorchModule.fromAsset("assets/best.torchscript.pt");
   }
 
-  Future<List<ClassificationResult>> _classify(
-      ClassificationRequest request) async {
-    final stopwatch = Stopwatch();
-    stopwatch.start();
+  static void processingThread(SendPort responsePort) async {
+    ReceivePort listenPort = ReceivePort();
+    responsePort.send(listenPort.sendPort);
 
-    Image? originalImage;
-    if (request.image != null) {
-      originalImage = CameraUtils.convertCameraImage(request.image!);
-      if (Platform.isAndroid) {
-        originalImage = copyRotate(originalImage!, 90);
+    await for (final ImageProcessRequest? request in listenPort) {
+      if (request != null) {
+        var image = CameraUtils.convertCameraImage(request.image);
+        if (Platform.isAndroid) {
+          image = copyRotate(image!, 90);
+        }
+        // } else if (request.asset != null) {
+        //   originalImage = request.asset;
+        // }
+
+        image = copyResizeCropSquare(image!, _inputSize);
+        //var tensorImage = _createTensorImage(image!);
+        var tensorImage = _createARGBImage(image);
+        request.port.send(ImageProcessResponse(tensorImage));
       }
-    } else if (request.asset != null) {
-      originalImage = request.asset;
+    }
+  }
+
+  static Int32List _createARGBImage(Image image) {
+    var buffer = Int32List(image.width * image.height);
+    var imageData = image.data;
+    for (int i = 0; i < imageData.length; ++i) {
+      var pixelValue = imageData[i];
+      var argbValue = pixelValue & 0xff00ff00; // alpha and green
+      argbValue = argbValue | ((pixelValue & 0xff) << 16); // red
+      argbValue = argbValue | ((pixelValue & 0xff0000) >> 16); // blue
+      buffer[i] = argbValue;
     }
 
-    if (originalImage == null) {
+    return buffer;
+  }
+
+  Future<Int32List> _createTensorFromImage(CameraImage cameraImage) async {
+    var responsePort = ReceivePort();
+    var message = ImageProcessRequest(cameraImage, responsePort.sendPort);
+    _processingPort.send(message);
+
+    ImageProcessResponse response = await responsePort.first;
+    return response.imageData;
+  }
+
+  Future<List<ClassificationResult>> classify(CameraImage? cameraImage) async {
+    if (_pyTorchModule == null) {
       return [];
     }
 
-    List<ClassificationResult> foundObjects = [];
+    final stopwatch = Stopwatch();
+    stopwatch.start();
 
-    final image = copyResizeCropSquare(originalImage, _inputSize);
-    var tensorImage = _createTensorImage(image);
+    List<ClassificationResult> foundObjects = [];
+    if (cameraImage == null) {
+      return [];
+    }
+
+    var tensorImage = await _createTensorFromImage(cameraImage);
 
     print(
         "Prep time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
-    final outputTensor = _interpreter.getOutputTensor(0);
-    final outputShape = outputTensor.shape;
-    final outputSize =
-        outputShape.fold<int>(1, (value, element) => value * element);
-    var output = Uint8List(outputSize);
-    var outputs = {0: output};
-
-    _interpreter.runForMultipleInputs([tensorImage], outputs);
+    var output =
+        await _pyTorchModule?.execute(tensorImage, _inputSize, _inputSize);
 
     print(
-        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)} / ${_interpreter.lastNativeInferenceDurationMicroSeconds}us");
+        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
-    var items = outputShape[1];
-    var members = outputShape[2];
-    for (int i = 0; i < items; ++i) {
-      var baseIndex = members * i;
-      var score = output[baseIndex + 4];
-      if (score > 80) {
-        var rect = Rect.fromCenter(
-          center: Offset(
-            output[baseIndex] * _outputToImageLoc,
-            output[baseIndex + 1] * _outputToImageLoc,
-          ),
-          width: output[baseIndex + 2] * _outputToImageLoc,
-          height: output[baseIndex + 3] * _outputToImageLoc,
-        );
+    if (output != null) {
+      int items = output.shape[1];
+      int members = output.shape[2];
+      for (int i = 0; i < items; ++i) {
+        var baseIndex = members * i;
+        var score = output.data[baseIndex + 4];
+        if (score > 0.8) {
+          // TODO: Double check this logic for assembling the rectangles,
+          // It was pulled from old TensorFlow work and may not be correct.
+          var rect = Rect.fromCenter(
+            center: Offset(
+              output.data[baseIndex] * _outputToImageLoc,
+              output.data[baseIndex + 1] * _outputToImageLoc,
+            ),
+            width: output.data[baseIndex + 2] * _outputToImageLoc,
+            height: output.data[baseIndex + 3] * _outputToImageLoc,
+          );
 
-        var classes =
-            List.generate(10, (index) => output[baseIndex + 5 + index]);
-        var bestClass = _findBestIndex(classes);
+          var classes =
+              List.generate(10, (index) => output.data[baseIndex + 5 + index]);
+          var bestClass = _findBestIndex(classes);
 
-        var foundObject = ClassificationResult(rect, score, bestClass);
-        _addIfBetter(foundObjects, foundObject);
+          var foundObject = ClassificationResult(rect, score, bestClass);
+          _addIfBetter(foundObjects, foundObject);
+        }
       }
-    }
-
-    for (var foundObject in foundObjects) {
-      // Translate the boxes to camera-image coordinates
-      foundObject.rect =
-          _uncropRect(foundObject.rect, originalImage, _inputSize);
     }
 
     print(
@@ -143,22 +167,9 @@ class ThreadedClassifier {
     return foundObjects;
   }
 
-  static Uint8List _createTensorImage(Image image) {
-    var buffer = Uint8List(image.width * image.height * 3);
-    var imageData = image.data;
-    for (int i = 0; i < imageData.length; ++i) {
-      var pixelValue = imageData[i];
-      var writeIndex = i * 3;
-      buffer[writeIndex] = (pixelValue & 0xff);
-      buffer[writeIndex + 1] = ((pixelValue >> 8) & 0xff);
-      buffer[writeIndex + 2] = ((pixelValue >> 16) & 0xff);
-    }
-
-    return buffer;
-  }
-
-  int _findBestIndex(List<int> classScores) {
-    var maxIndex = 0, maxValue = 0;
+  int _findBestIndex(List<double> classScores) {
+    var maxIndex = 0;
+    var maxValue = 0.0;
     for (int i = 0; i < classScores.length; ++i) {
       if (classScores[i] > maxValue) {
         maxValue = classScores[i];
@@ -222,97 +233,5 @@ class ThreadedClassifier {
     // }
 
     return uncropped;
-  }
-
-  static void isolateEntry(IsolateStart isoStart) async {
-    print("Starting classification isolate");
-
-    final port = ReceivePort();
-    isoStart.sendPort.send(port.sendPort);
-
-    var classifier =
-        ThreadedClassifier(isoStart.interpeterAddress, isoStart.documentsPath);
-
-    await for (final ClassificationRequest? request in port) {
-      if (request != null) {
-        print("Recieved classification request, processing... ");
-
-        try {
-          var results = await classifier._classify(request);
-          request.responsePort.send(results);
-        } catch (e) {
-          print("Failure running classifier $e");
-          request.responsePort.send(<ClassificationResult>[]);
-        }
-      }
-    }
-  }
-}
-
-class Classifier {
-  Interpreter? _interpreter;
-
-  static const String _modelFileName = "best-int8.tflite";
-
-  Isolate? _classificationIsolate;
-  SendPort? _sendPort;
-  ReceivePort _receivePort = ReceivePort();
-
-  bool get ready => _interpreter != null && _classificationIsolate != null;
-
-  Future<void> start() async {
-    await _loadModel();
-
-    if (_classificationIsolate != null) {
-      _classificationIsolate!.kill();
-      _classificationIsolate = null;
-    }
-
-    var documentsDir = await getApplicationDocumentsDirectory();
-
-    _classificationIsolate = await Isolate.spawn<IsolateStart>(
-        ThreadedClassifier.isolateEntry,
-        IsolateStart(
-            _receivePort.sendPort, _interpreter!.address, documentsDir.path));
-
-    // After the isolate spawns it will send us back the port we should send information on
-    _sendPort = await _receivePort.first;
-  }
-
-  void stop() async {
-    _classificationIsolate?.kill();
-    _classificationIsolate = null;
-  }
-
-  Future<List<ClassificationResult>> classify(CameraImage image) async {
-    var responsePort = ReceivePort();
-    var message = ClassificationRequest(
-        image: image, responsePort: responsePort.sendPort);
-    _sendPort?.send(message);
-
-    return await responsePort.first;
-  }
-
-  Future<List<ClassificationResult>> classifyAsset(String asset) async {
-    var raw = await rootBundle.load('assets/$asset');
-    var imageAsset = decodeImage(raw.buffer.asUint8List());
-
-    var responsePort = ReceivePort();
-    var message = ClassificationRequest(
-        asset: imageAsset, responsePort: responsePort.sendPort);
-    _sendPort?.send(message);
-
-    return await responsePort.first;
-  }
-
-  Future<void> _loadModel() async {
-    try {
-      final options = InterpreterOptions()..threads = 4;
-      _interpreter =
-          await Interpreter.fromAsset(_modelFileName, options: options);
-    } catch (e) {
-      print("Error creating interpreter: $e");
-    }
-    print("[] Loaded tensorflow model");
   }
 }

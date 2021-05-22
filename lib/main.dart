@@ -39,8 +39,8 @@ class _MyHomePageState extends State<MyHomePage> {
     _loadClassifier();
   }
 
-  void _loadClassifier() async {
-    await _classifier.start();
+  void _loadClassifier() {
+    _classifier.start();
   }
 
   @override

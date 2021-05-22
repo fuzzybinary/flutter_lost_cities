@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.example.flutter_match"
+        applicationId "com.fuzzybinary.flutter_match"
         minSdkVersion 29
         targetSdkVersion 30
         versionCode flutterVersionCode.toInteger()
@@ -56,6 +56,6 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation "org.tensorflow:tensorflow-lite:2.5.0"
-    implementation "org.tensorflow:tensorflow-lite-gpu:2.5.0"
+    implementation 'org.pytorch:pytorch_android:1.8.0'
+    implementation 'org.pytorch:pytorch_android_torchvision:1.8.0'
 }
