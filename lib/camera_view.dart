@@ -7,8 +7,13 @@ typedef void OnCameraData(CameraImage cameraData);
 class CameraView extends StatefulWidget {
   final OnCameraData onCameraData;
   final Widget? child;
+  final bool isStreaming;
 
-  CameraView({Key? key, required this.onCameraData, this.child})
+  CameraView(
+      {Key? key,
+      required this.onCameraData,
+      required this.isStreaming,
+      this.child})
       : super(key: key);
 
   @override
@@ -17,8 +22,9 @@ class CameraView extends StatefulWidget {
 
 class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   CameraController? _cameraController;
+  Future<void>? _initCameraFuture;
 
-  void _initializeCamera() async {
+  Future<void> _initializeCamera() async {
     var cameras = await availableCameras();
     if (cameras.isEmpty) return;
 
@@ -44,7 +50,18 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance?.addObserver(this);
 
-    _initializeCamera();
+    _initCameraFuture = _initializeCamera();
+  }
+
+  @override
+  void didUpdateWidget(CameraView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.isStreaming && !oldWidget.isStreaming) {
+      _cameraController?.startImageStream(_onLatestImageAvailable);
+    } else if (!widget.isStreaming && oldWidget.isStreaming) {
+      _cameraController?.stopImageStream();
+    }
   }
 
   @override
@@ -78,11 +95,15 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return CircularProgressIndicator();
-    }
-
-    //return CameraPlatform.instance.buildPreview(_cameraController!.cameraId);
-    return CameraPreview(_cameraController!, child: widget.child);
+    return FutureBuilder(
+      future: _initCameraFuture!,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          return CameraPreview(_cameraController!, child: widget.child);
+        } else {
+          return const Center(child: CircularProgressIndicator());
+        }
+      },
+    );
   }
 }

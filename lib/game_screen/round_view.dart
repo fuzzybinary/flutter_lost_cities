@@ -4,15 +4,14 @@ import 'package:flutter_match/models/game_round.dart';
 
 import 'expanding_section.dart';
 
-typedef ScoreCallback = void Function(int player, int expidition);
+typedef ScoreCallback = void Function(
+    int player, ExpiditionColorIndex expidition);
 
 class RoundButton extends StatelessWidget {
   final Color color;
   final int score;
   final Function() onPressed;
   final bool enabled;
-
-  void todo() {}
 
   RoundButton({
     required this.color,
@@ -48,24 +47,24 @@ class RoundDetails extends StatelessWidget {
   RoundDetails({Key? key, required this.round, required this.onScoreRequested})
       : super(key: key);
 
-  Widget _expiditionRow(int expiditionIndex) {
+  Widget _expiditionRow(ExpiditionColorIndex expiditionColor) {
     return Row(
       children: [
-        Text(expiditionColorNames[expiditionIndex]),
+        Text(expiditionColorNames[expiditionColor.index]),
         Expanded(
           child: Container(),
         ),
         RoundButton(
-          color: expiditionColors[expiditionIndex],
-          score: round.player1Scores[expiditionIndex],
+          color: expiditionColors[expiditionColor.index],
+          score: round.player1Scores[expiditionColor.index],
           enabled: !round.isComplete,
-          onPressed: () => onScoreRequested(0, expiditionIndex),
+          onPressed: () => onScoreRequested(0, expiditionColor),
         ),
         RoundButton(
-          color: expiditionColors[expiditionIndex],
-          score: round.player2Scores[expiditionIndex],
+          color: expiditionColors[expiditionColor.index],
+          score: round.player2Scores[expiditionColor.index],
           enabled: !round.isComplete,
-          onPressed: () => onScoreRequested(1, expiditionIndex),
+          onPressed: () => onScoreRequested(1, expiditionColor),
         ),
       ],
     );
@@ -76,7 +75,8 @@ class RoundDetails extends StatelessWidget {
     return Container(
       padding: EdgeInsets.only(left: 15, right: 5),
       child: Column(
-        children: [for (int i = 0; i < 5; ++i) _expiditionRow(i)],
+        children:
+            ExpiditionColorIndex.values.map((e) => _expiditionRow(e)).toList(),
       ),
     );
   }

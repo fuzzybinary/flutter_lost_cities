@@ -1,8 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_match/models/game_round.dart';
 import 'package:flutter_match/scoring_screen/scoring_bloc.dart';
+import 'package:flutter_match/tflite/camera_utils.dart';
 import 'package:flutter_match/tflite/classifier.dart';
+import 'package:image/image.dart' as img;
 
 import '../camera_view.dart';
 
@@ -11,13 +16,21 @@ class ScoringResult {
       List.filled(ExpiditionColorIndex.values.length, null);
 }
 
+typedef void ScoringResultCallback(
+    ExpiditionColorIndex expiditionIndex, int score);
+
 class ScoringScreen extends StatefulWidget {
   final Classifier classifier;
+  final GameRound round;
+  final ExpiditionColorIndex initialExpidition;
 
-  ScoringScreen(this.classifier);
+  ScoringScreen(
+      {required this.classifier,
+      required this.initialExpidition,
+      required this.round});
 
   @override
-  State<StatefulWidget> createState() => _ScoringState();
+  State<StatefulWidget> createState() => _ScoringState(classifier, round);
 }
 
 class _ScoringState extends State<ScoringScreen>
@@ -27,11 +40,26 @@ class _ScoringState extends State<ScoringScreen>
   late ThemeData _currentTheme;
   Animation<ThemeData>? _themeAnimation;
 
-  ScoringBloc _bloc = ScoringBloc();
+  late ScoringBloc _bloc;
+  late Future _cameraDelayFuture;
 
-  // TODO: This is set to true for now to essentially disable the classifier
-  // while I work on the UI
-  bool _classifying = false;
+  Key _cameraKey = UniqueKey();
+  bool _streamingCamera = true;
+  CameraImage? _lastCameraImage;
+  Image? _pausedImage;
+
+  _ScoringState(Classifier classifier, GameRound round)
+      : _bloc = ScoringBloc(classifier, round);
+
+  @override
+  void initState() {
+    super.initState();
+
+    _bloc.currentExpidition = widget.initialExpidition;
+    // Allow the screen to animate in before attempting to initialize the camera
+    // This is a bit of a hack to avoid some visual jank
+    _cameraDelayFuture = Future.delayed(Duration(milliseconds: 500));
+  }
 
   @override
   void didChangeDependencies() {
@@ -56,45 +84,71 @@ class _ScoringState extends State<ScoringScreen>
   }
 
   void _onCameraData(CameraImage cameraImage) async {
-    if (_classifying) {
-      return;
-    }
-
-    _classifying = true;
-
-    var classifications = await widget.classifier.classify(cameraImage);
-    print(classifications);
-    _classifying = false;
+    _lastCameraImage = cameraImage;
+    await _bloc.onCameraData(cameraImage);
 
     if (mounted) {
-      setState(() {
-        _bloc.setClassifications(classifications);
-      });
+      setState(() {});
     }
   }
 
-  // Unused for now until I need to test the classifier again
-  // ignore: unused_element
-  // void _classifySample() async {
+  void setExpidition(ExpiditionColorIndex expiditionIndex) {
+    setState(() {
+      _bloc.currentExpidition = expiditionIndex;
+      _animateThemeChange();
+    });
+  }
 
-  //   if (_classifying) {
-  //     return;
-  //   }
+  void _onCameraPause() {
+    if (_lastCameraImage != null) {
+      var rawPausedImage = CameraUtils.convertCameraImage(_lastCameraImage!);
+      if (rawPausedImage != null) {
+        if (Platform.isAndroid) {
+          rawPausedImage = img.copyRotate(rawPausedImage, 90);
+        }
+        final rawJpgImage = img.encodeJpg(rawPausedImage);
+        _pausedImage = Image.memory(Uint8List.fromList(rawJpgImage));
+      }
+    }
 
-  //   _classifying = true;
+    setState(() {
+      _streamingCamera = !_streamingCamera;
+    });
+  }
 
-  //   var classifications =
-  //       await widget.classifier.classifyAsset('test_image.jpg');
-  //   print(classifications);
+  Widget _bottomBar(ThemeData theme) {
+    return Row(
+      children: ExpiditionColorIndex.values.map((element) {
+        bool isCurrent = element == _bloc.currentExpidition;
+        return Expanded(
+          child: Container(
+            decoration:
+                isCurrent ? BoxDecoration(color: Colors.amberAccent) : null,
+            padding: isCurrent ? EdgeInsets.only(left: 2, right: 2) : null,
+            child: OutlinedButton(
+              child: Text(isCurrent
+                  ? '${_bloc.currentScore}'
+                  : '${_bloc.round.player1Scores[element.index]}'),
+              onPressed: () => setExpidition(element),
+              style: OutlinedButton.styleFrom(
+                primary: Colors.white,
+                backgroundColor: expiditionColors[element.index],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
-  //   _classifying = false;
-  // }
-
-  void todo() {}
-
-  Widget _scoringButton(ThemeData theme, String score, bool isOn) {
+  Widget _scoringButton(ThemeData theme, String score, int cardIndex) {
+    final isOn = _bloc.enabledCards[cardIndex];
     return ElevatedButton(
-      onPressed: todo,
+      onPressed: () {
+        setState(() {
+          _bloc.toggleCard(cardIndex);
+        });
+      },
       child: Text(score),
       style: ElevatedButton.styleFrom(
         primary: theme.primaryColor.withOpacity(isOn ? 1.0 : 0.4),
@@ -102,25 +156,65 @@ class _ScoringState extends State<ScoringScreen>
     );
   }
 
-  Widget _cameraViewStack(BuildContext context, ThemeData themeData) {
-    return CameraView(
-      onCameraData: _onCameraData,
-      child: Stack(
+  Widget _cameraViewStack(
+      Key cameraKey, BuildContext context, ThemeData themeData) {
+    final cardButtons = Container(
+      alignment: Alignment.topRight,
+      child: Column(children: [
+        for (var i = 0; i < _bloc.enabledCards.length; ++i)
+          _scoringButton(
+            themeData,
+            i < 3 ? "H" : (i - 1).toString(),
+            i,
+          ),
+      ]),
+    );
+    final actionButtons = Container(
+      alignment: Alignment.bottomCenter,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            alignment: Alignment.topRight,
-            child: Column(children: [
-              for (var i = 0; i < _bloc.enabledCards.length; ++i)
-                _scoringButton(
-                  themeData,
-                  i < 3 ? "H" : (i - 1).toString(),
-                  _bloc.enabledCards[i],
-                )
-            ]),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: FloatingActionButton(
+              onPressed: _onCameraPause,
+              child:
+                  _streamingCamera ? Icon(Icons.pause) : Icon(Icons.play_arrow),
+              backgroundColor: themeData.primaryColor,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: FloatingActionButton(
+              onPressed: _onNext,
+              child: Icon(Icons.check),
+              backgroundColor: themeData.primaryColor,
+            ),
           ),
         ],
       ),
     );
+    if (_streamingCamera) {
+      return CameraView(
+        key: cameraKey,
+        onCameraData: _onCameraData,
+        isStreaming: _streamingCamera,
+        child: Stack(
+          children: [
+            cardButtons,
+            actionButtons,
+          ],
+        ),
+      );
+    } else {
+      return Stack(
+        children: [
+          _pausedImage ?? Container(),
+          cardButtons,
+          actionButtons,
+        ],
+      );
+    }
   }
 
   void _animateThemeChange() {
@@ -144,7 +238,7 @@ class _ScoringState extends State<ScoringScreen>
 
   void _onNext() {
     setState(() {
-      _bloc.nextExpidition(false);
+      _bloc.nextExpidition(true);
       _animateThemeChange();
     });
   }
@@ -161,28 +255,22 @@ class _ScoringState extends State<ScoringScreen>
     return Theme(
       data: themeData,
       child: Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(title: Text("Score: ${_bloc.currentScore}")),
         body: Center(
           child: Column(children: [
-            Text("Current Score: ${_bloc.currentScore}"),
-            _cameraViewStack(context, themeData),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _onBack,
-                  child: Icon(Icons.arrow_back),
-                ),
-                ElevatedButton(
-                  onPressed: todo,
-                  child: Icon(Icons.pause),
-                ),
-                ElevatedButton(
-                  onPressed: _onNext,
-                  child: Icon(Icons.arrow_forward),
-                )
-              ],
-            )
+            Expanded(
+              child: FutureBuilder(
+                future: _cameraDelayFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.done) {
+                    return _cameraViewStack(_cameraKey, context, themeData);
+                  } else {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                },
+              ),
+            ),
+            _bottomBar(themeData),
           ]),
         ),
       ),

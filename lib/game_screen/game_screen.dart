@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_match/game_screen/game_sceen_app_bar.dart';
 import 'package:flutter_match/game_screen/round_view.dart';
+import 'package:flutter_match/models/game_round.dart';
 import 'package:flutter_match/scoring_screen/scoring_screen.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
@@ -18,19 +19,23 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   GameScreenBloc _bloc = GameScreenBloc();
 
-  void _onRequestScore(BuildContext context, int player, int expidition) async {
-    var scoringResult = await Navigator.push<ScoringResult>(
+  void _onRequestScore(
+      BuildContext context, int player, ExpiditionColorIndex expidition) async {
+    await Navigator.push<ScoringResult>(
       context,
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (context) {
-          return ScoringScreen(widget.classifier);
+          return ScoringScreen(
+            classifier: widget.classifier,
+            initialExpidition: expidition,
+            round: _bloc.rounds.last,
+          );
         },
       ),
     );
-    if (scoringResult != null) {
-      // TODO:
-    }
+    // Reset round scores when we return
+    setState(() {});
   }
 
   void _addRound(BuildContext context) async {

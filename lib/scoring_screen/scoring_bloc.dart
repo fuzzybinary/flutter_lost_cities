@@ -1,14 +1,16 @@
 import 'dart:math';
 
+import 'package:camera/camera.dart';
 import 'package:flutter_match/models/game_round.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
 class ScoringBloc {
-  List<int?> _classifiedScores =
-      List.filled(ExpiditionColorIndex.values.length, null);
+  final Classifier classifier;
+  final GameRound round;
 
-  ExpiditionColorIndex _currentExpidition = ExpiditionColorIndex.Yellow;
-  ExpiditionColorIndex get currentExpidition => _currentExpidition;
+  bool _classifying = false;
+
+  ExpiditionColorIndex currentExpidition = ExpiditionColorIndex.Yellow;
 
   // This is 3 hands + 9 number cards
   List<bool> _enabledCards = List.filled(12, false);
@@ -17,32 +19,55 @@ class ScoringBloc {
   int _currentScore = 0;
   int get currentScore => _currentScore;
 
-  int totalCards = 0;
-  bool get hasTwentyPointBonus => totalCards >= 8;
+  bool _hasTwentyPointBonus = false;
+  bool get hasTwentyPointBonus => _hasTwentyPointBonus;
+
+  ScoringBloc(this.classifier, this.round);
+
+  Future<void> onCameraData(CameraImage cameraImage) async {
+    if (_classifying) {
+      return;
+    }
+
+    _classifying = true;
+
+    final classifications = await classifier.classify(cameraImage);
+    _updateClassifications(classifications);
+    _classifying = false;
+  }
+
+  void toggleCard(int cardIndex) {
+    _enabledCards[cardIndex] = !_enabledCards[cardIndex];
+    _updateScoring();
+  }
+
+  void toggleClassifier() {}
 
   void prevExpidition() {
-    var expiditionIndex = _currentExpidition.index - 1;
+    var expiditionIndex = currentExpidition.index - 1;
     if (expiditionIndex < 0) {
       expiditionIndex = ExpiditionColorIndex.values.length - 1;
     }
-    _currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
+    currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
   }
 
   void nextExpidition(bool didConfirmScore) {
     if (didConfirmScore) {
-      _classifiedScores[_currentExpidition.index] = _currentScore;
+      round.player1Scores[currentExpidition.index] = _currentScore;
     }
-    var expiditionIndex = _currentExpidition.index + 1;
+    var expiditionIndex = currentExpidition.index + 1;
     if (expiditionIndex >= ExpiditionColorIndex.values.length) {
       expiditionIndex = 0;
     }
-    _currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
+    _enabledCards.fillRange(0, 12, false);
+    _updateScoring();
+
+    currentExpidition = ExpiditionColorIndex.values[expiditionIndex];
   }
 
-  void setClassifications(List<ClassificationResult> classifications) {
+  void _updateClassifications(List<ClassificationResult> classifications) {
     _enabledCards = List.filled(12, false);
 
-    int baseScore = 0;
     int numHands = 0;
     for (var c in classifications) {
       var cardValue = 0;
@@ -59,7 +84,6 @@ class ScoringBloc {
         var cardIndex = (cardValue - 2) + 3;
         if (!_enabledCards[cardIndex]) {
           _enabledCards[cardIndex] = true;
-          baseScore += cardValue;
         }
       }
     }
@@ -68,10 +92,31 @@ class ScoringBloc {
     for (int i = 0; i < numHands; ++i) {
       _enabledCards[i] = true;
     }
+    _updateScoring();
+  }
 
-    totalCards = _enabledCards.where((e) => e).length;
-    if (baseScore > 0) {
-      _currentScore = (baseScore - 20) * numHands;
+  void _updateScoring() {
+    int numCards = 0;
+    var numHands = 0;
+    int baseScore = 0;
+
+    for (int i = 0; i < _enabledCards.length; ++i) {
+      if (_enabledCards[i]) {
+        numCards++;
+        var cardValue = 0;
+        if (i > 2) {
+          cardValue = i - 1; // Values 2-10 past the first 3 cards
+        } else {
+          numHands++;
+        }
+
+        baseScore += cardValue;
+      }
+    }
+
+    if (numCards > 0) {
+      _currentScore = (baseScore - 20) * (numHands + 1);
+      _hasTwentyPointBonus = numCards >= 8;
       if (hasTwentyPointBonus) {
         _currentScore += 20;
       }
