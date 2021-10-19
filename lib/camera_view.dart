@@ -59,8 +59,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
     if (widget.isStreaming && !oldWidget.isStreaming) {
       _cameraController?.startImageStream(_onLatestImageAvailable);
+      _cameraController?.resumePreview();
     } else if (!widget.isStreaming && oldWidget.isStreaming) {
       _cameraController?.stopImageStream();
+      _cameraController?.pausePreview();
     }
   }
 

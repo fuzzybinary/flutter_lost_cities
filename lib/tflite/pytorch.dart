@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 class OutputTensor {
   final Int64List shape;
-  final Float64List data;
+  final Float32List data;
 
   OutputTensor(this.shape, this.data);
 }

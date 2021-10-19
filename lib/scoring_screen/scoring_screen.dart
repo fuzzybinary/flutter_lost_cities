@@ -1,13 +1,8 @@
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_match/models/game_round.dart';
 import 'package:flutter_match/scoring_screen/scoring_bloc.dart';
-import 'package:flutter_match/tflite/camera_utils.dart';
 import 'package:flutter_match/tflite/classifier.dart';
-import 'package:image/image.dart' as img;
 
 import '../camera_view.dart';
 
@@ -45,8 +40,6 @@ class _ScoringState extends State<ScoringScreen>
 
   Key _cameraKey = UniqueKey();
   bool _streamingCamera = true;
-  CameraImage? _lastCameraImage;
-  Image? _pausedImage;
 
   _ScoringState(Classifier classifier, GameRound round)
       : _bloc = ScoringBloc(classifier, round);
@@ -84,7 +77,6 @@ class _ScoringState extends State<ScoringScreen>
   }
 
   void _onCameraData(CameraImage cameraImage) async {
-    _lastCameraImage = cameraImage;
     await _bloc.onCameraData(cameraImage);
 
     if (mounted) {
@@ -100,17 +92,6 @@ class _ScoringState extends State<ScoringScreen>
   }
 
   void _onCameraPause() {
-    if (_lastCameraImage != null) {
-      var rawPausedImage = CameraUtils.convertCameraImage(_lastCameraImage!);
-      if (rawPausedImage != null) {
-        if (Platform.isAndroid) {
-          rawPausedImage = img.copyRotate(rawPausedImage, 90);
-        }
-        final rawJpgImage = img.encodeJpg(rawPausedImage);
-        _pausedImage = Image.memory(Uint8List.fromList(rawJpgImage));
-      }
-    }
-
     setState(() {
       _streamingCamera = !_streamingCamera;
     });
@@ -151,6 +132,7 @@ class _ScoringState extends State<ScoringScreen>
       },
       child: Text(score),
       style: ElevatedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
         primary: theme.primaryColor.withOpacity(isOn ? 1.0 : 0.4),
       ),
     );
@@ -158,16 +140,25 @@ class _ScoringState extends State<ScoringScreen>
 
   Widget _cameraViewStack(
       Key cameraKey, BuildContext context, ThemeData themeData) {
+    final buttonStyle = ElevatedButton.styleFrom(
+      shape: CircleBorder(),
+      padding: EdgeInsets.all(15),
+    );
+
     final cardButtons = Container(
       alignment: Alignment.topRight,
-      child: Column(children: [
-        for (var i = 0; i < _bloc.enabledCards.length; ++i)
-          _scoringButton(
-            themeData,
-            i < 3 ? "H" : (i - 1).toString(),
-            i,
-          ),
-      ]),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            for (var i = 0; i < _bloc.enabledCards.length; ++i)
+              _scoringButton(
+                themeData,
+                i < 3 ? "H" : (i - 1).toString(),
+                i,
+              ),
+          ],
+        ),
+      ),
     );
     final actionButtons = Container(
       alignment: Alignment.bottomCenter,
@@ -175,46 +166,44 @@ class _ScoringState extends State<ScoringScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: FloatingActionButton(
-              onPressed: _onCameraPause,
-              child:
-                  _streamingCamera ? Icon(Icons.pause) : Icon(Icons.play_arrow),
-              backgroundColor: themeData.primaryColor,
+            padding: const EdgeInsets.all(10.0),
+            child: ElevatedButton(
+              onPressed: _onBack,
+              style: buttonStyle,
+              child: Icon(Icons.fast_rewind),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: FloatingActionButton(
+            padding: const EdgeInsets.all(10.0),
+            child: ElevatedButton(
+              onPressed: _onCameraPause,
+              style: buttonStyle,
+              child:
+                  _streamingCamera ? Icon(Icons.pause) : Icon(Icons.play_arrow),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: ElevatedButton(
               onPressed: _onNext,
-              child: Icon(Icons.check),
-              backgroundColor: themeData.primaryColor,
+              style: buttonStyle,
+              child: Icon(Icons.fast_forward),
             ),
           ),
         ],
       ),
     );
-    if (_streamingCamera) {
-      return CameraView(
-        key: cameraKey,
-        onCameraData: _onCameraData,
-        isStreaming: _streamingCamera,
-        child: Stack(
-          children: [
-            cardButtons,
-            actionButtons,
-          ],
-        ),
-      );
-    } else {
-      return Stack(
+    return CameraView(
+      key: cameraKey,
+      onCameraData: _onCameraData,
+      isStreaming: _streamingCamera,
+      child: Stack(
         children: [
-          _pausedImage ?? Container(),
           cardButtons,
           actionButtons,
         ],
-      );
-    }
+      ),
+    );
   }
 
   void _animateThemeChange() {
