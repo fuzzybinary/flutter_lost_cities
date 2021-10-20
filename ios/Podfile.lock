@@ -1,0 +1,39 @@
+PODS:
+  - camera (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - LibTorch-Lite (1.9.0):
+    - LibTorch-Lite/Core (= 1.9.0)
+  - LibTorch-Lite/Core (1.9.0):
+    - LibTorch-Lite/Torch
+  - LibTorch-Lite/Torch (1.9.0)
+  - path_provider (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - camera (from `.symlinks/plugins/camera/ios`)
+  - Flutter (from `Flutter`)
+  - LibTorch-Lite (~> 1.9.0)
+  - path_provider (from `.symlinks/plugins/path_provider/ios`)
+
+SPEC REPOS:
+  trunk:
+    - LibTorch-Lite
+
+EXTERNAL SOURCES:
+  camera:
+    :path: ".symlinks/plugins/camera/ios"
+  Flutter:
+    :path: Flutter
+  path_provider:
+    :path: ".symlinks/plugins/path_provider/ios"
+
+SPEC CHECKSUMS:
+  camera: a0ca5080336f7af47b88436e5e26da3dee5568f0
+  Flutter: 50d75fe2f02b26cc09d224853bb45737f8b3214a
+  LibTorch-Lite: a9e7c3f986af0495d44b27e3fadeda699afed1f0
+  path_provider: abfe2b5c733d04e238b0d8691db0cfd63a27a93c
+
+PODFILE CHECKSUM: 7d86ed783e8699a9f1b1fd75c181e6fd52346812
+
+COCOAPODS: 1.11.2
