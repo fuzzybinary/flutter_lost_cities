@@ -106,17 +106,11 @@ class PyTorchPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val handler = Handler(Looper.getMainLooper())
         executor.execute {
           val tensor = module.execute(imageData!!, imageWidth!!, imageHeight!!)
-          var data: DoubleArray? = null;
-          tensor?.let {
-            val floatData = it.dataAsFloatArray
-            data = DoubleArray(floatData.size)
-            floatData.forEachIndexed { index, value -> data!![index] = value.toDouble() }
-          }
           handler.post {
             tensor?.let {
               result.success(mapOf(
                   "shape" to it.shape(),
-                  "data" to data
+                  "data" to tensor?.dataAsFloatArray
               ))
             } ?: result.success(null)
           }
