@@ -17,7 +17,7 @@ NS_SWIFT_NAME(init(fileAtPath:objectId:))NS_DESIGNATED_INITIALIZER;
 + (instancetype)new NS_UNAVAILABLE;
 - (instancetype)init NS_UNAVAILABLE;
 
-- (NSData*)executeWithData:(NSData*)data width:(int)width height:(int)height;
+- (NSDictionary<NSString*, NSObject*>*)executeWithData:(NSData*)data width:(int)width height:(int)height;
 @end
 
 NS_ASSUME_NONNULL_END

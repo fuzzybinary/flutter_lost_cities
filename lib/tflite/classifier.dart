@@ -57,8 +57,7 @@ class Classifier {
 
     _processingPort = await responsePort.first;
 
-    _pyTorchModule =
-        await PyTorchModule.fromAsset("assets/best.torchscript.pt");
+    _pyTorchModule = await PyTorchModule.fromAsset("assets/lostcities.ptl");
   }
 
   static void processingThread(SendPort responsePort) async {
@@ -121,15 +120,15 @@ class Classifier {
 
     var tensorImage = await _createTensorFromImage(cameraImage);
 
-    print(
-        "Prep time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
+    // print(
+    //     "Prep time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
     var output =
         await _pyTorchModule?.execute(tensorImage, _inputSize, _inputSize);
 
-    print(
-        "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
+    // print(
+    //     "Classification Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
     if (output != null) {
@@ -160,8 +159,8 @@ class Classifier {
       }
     }
 
-    print(
-        "Postprocessing Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
+    // print(
+    //     "Postprocessing Time: ${(stopwatch.elapsedMicroseconds / 1000).toStringAsFixed(2)}");
     stopwatch.reset();
 
     return foundObjects;

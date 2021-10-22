@@ -33,24 +33,38 @@
   return self;
 }
 
-- (NSData*)executeWithData:(NSData*)data width:(int)width height:(int)height {
+- (NSDictionary<NSString*, NSObject*>*)executeWithData:(NSData*)data width:(int)width height:(int)height {
+  // Data is argb data and needs to be converted to float32
+  uint8_t* raw = (uint8_t*)[data bytes];
+  float* normalizedBuffer = new float[width*height*3];
+  int pixelsCount = width*height;
+  for(int i = 0; i < pixelsCount; ++i) {
+      normalizedBuffer[i] = raw[i * 4 + 0] / 255.0f;
+      normalizedBuffer[i + pixelsCount] = raw[i*4 + 1] / 255.0f;
+      normalizedBuffer[i + pixelsCount + pixelsCount] = raw[i*4 + 2] / 255.0f;
+  }
 
-  at::Tensor tensor = torch::from_blob((void *)[data bytes], {1, 3, width, height}, at::kQInt32);
-  torch::autograd::AutoGradMode guard(false);
-  at::AutoNonVariableTypeMode non_var_type_mode(true);
-  at::Tensor outputTensor = _impl.forward({tensor}).toTensor();
+  at::Tensor tensor = torch::from_blob((void *)normalizedBuffer, {1, 3, width, height}, at::kFloat);
+  c10::InferenceMode guard;
+  auto outputTuple = _impl.forward({tensor}).toTuple();
+  at::Tensor outputTensor = outputTuple->elements()[0].toTensor();
+  delete [] normalizedBuffer;
+
   float* floatBuffer = outputTensor.data_ptr<float>();
-  int totalSize = 0;
-  for(auto i : tensor.sizes()) {
-    totalSize += i;
+  at::IntArrayRef sizes = outputTensor.sizes();
+
+  NSMutableArray* shape = [[NSMutableArray alloc] initWithCapacity:sizes.size()];
+  int totalSize = 1;
+  for(auto i : sizes) {
+    totalSize *= i;
+    [shape addObject:[NSNumber numberWithLong:i]];
   }
 
-  double* doubleBuffer = new double[totalSize];
-  for(int i = 0; i < totalSize; ++i) {
-    doubleBuffer[i] = (double)floatBuffer[i];
-  }
-  NSData* resultData = [NSData dataWithBytes:(void *)doubleBuffer length:sizeof(double) * totalSize];
-  return resultData;
+  NSData* resultData = [NSData dataWithBytes:(void *)floatBuffer length:sizeof(float) * totalSize];
+  return @{
+    @"shape": shape,
+    @"data": resultData
+  };
 }
 
 - (NSArray<NSNumber*>*)predictImage:(void*)imageBuffer {

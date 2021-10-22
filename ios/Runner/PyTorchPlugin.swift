@@ -64,8 +64,23 @@ public class PyTorchPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "PyTorch:InvalidOperation", message: "Invalid arguments passed to 'execute'", details: nil))
         return
       }
-      let dataResult = module.execute(with: imageData.data, width: imageWidth.int32Value, height: imageHeight.int32Value)
-      result(FlutterStandardTypedData(float64: dataResult))
+
+      DispatchQueue.global(qos: .background).async {
+        let dataResult = module.execute(with: imageData.data, width: imageWidth.int32Value, height: imageHeight.int32Value)
+        let shape = dataResult["shape"] as! [Int64]
+        let shapeData = shape.withUnsafeBufferPointer { Data(buffer:$0) }
+
+        let flutterResult = [
+          "shape": FlutterStandardTypedData(int64: shapeData),
+          "data": FlutterStandardTypedData(float32: dataResult["data"] as! Data)
+        ]
+
+        DispatchQueue.main.async {
+          result(flutterResult)
+        }
+      }
+
+
     default:
       result(FlutterMethodNotImplemented)
     }

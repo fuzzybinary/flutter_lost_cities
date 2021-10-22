@@ -29,7 +29,7 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/path_provider/ios"
 
 SPEC CHECKSUMS:
-  camera: a0ca5080336f7af47b88436e5e26da3dee5568f0
+  camera: 3164201dc344383e62282964016528c4f5a9ad50
   Flutter: 50d75fe2f02b26cc09d224853bb45737f8b3214a
   LibTorch-Lite: a9e7c3f986af0495d44b27e3fadeda699afed1f0
   path_provider: abfe2b5c733d04e238b0d8691db0cfd63a27a93c
