@@ -57,8 +57,7 @@ class Classifier {
 
     _processingPort = await responsePort.first;
 
-    _pyTorchModule =
-        await PyTorchModule.fromAsset("assets/best.torchscript.pt");
+    _pyTorchModule = await PyTorchModule.fromAsset("assets/lostcities.ptl");
   }
 
   static void processingThread(SendPort responsePort) async {
