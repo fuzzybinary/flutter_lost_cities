@@ -1,16 +1,20 @@
 package com.fuzzybinary.flutter_lost_cities
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.pytorch.IValue
+import org.pytorch.LiteModuleLoader
 import org.pytorch.Module
-import org.pytorch.PyTorchAndroid
 import org.pytorch.Tensor
 import org.pytorch.torchvision.TensorImageUtils
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.SynchronousQueue
@@ -64,6 +68,16 @@ class PyTorchPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     _binding = null
   }
 
+  fun copyAsset(context: Context, assetPath: String, dest: File) {
+    context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)?.mkdirs()
+
+    context.assets.open(assetPath).use { input ->
+      FileOutputStream(dest).use {
+        input.copyTo(it)
+      }
+    }
+  }
+
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     val binding = _binding ?: run {
       result.error("PyTorch:InvalidOperation", "Attempting to call into PyTorch with detached plugin", null)
@@ -75,7 +89,12 @@ class PyTorchPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val modelFileName: String? = call.argument("model")
         try {
           val assetPath = binding.flutterAssets.getAssetFilePathByName(modelFileName!!)
-          val module = PyTorchAndroid.loadModuleFromAsset(binding.applicationContext.assets, assetPath)
+          val file = File(binding.applicationContext.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), modelFileName)
+          if (!(file.exists() && file.length() > 0)) {
+            copyAsset(binding.applicationContext, assetPath, file)
+          }
+          val absolutePath = file.absolutePath;
+          val module = LiteModuleLoader.load(absolutePath)
           val flutterModule = FlutterPyTorchModule(currentObjectId, module)
           moduleMap[flutterModule.objectId] = flutterModule
           currentObjectId++
