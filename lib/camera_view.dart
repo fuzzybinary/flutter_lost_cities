@@ -1,14 +1,14 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-typedef void OnCameraData(CameraImage cameraData);
+typedef OnCameraData = void Function(CameraImage cameraData);
 
 class CameraView extends StatefulWidget {
   final OnCameraData onCameraData;
   final Widget? child;
   final bool isStreaming;
 
-  CameraView(
+  const CameraView(
       {Key? key,
       required this.onCameraData,
       required this.isStreaming,

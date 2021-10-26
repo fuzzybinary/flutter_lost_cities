@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_match/game_screen/game_screen.dart';
+import 'package:flutter_match/network/network_service.dart';
 import 'package:flutter_match/tflite/classifier.dart';
 
 void main() {
@@ -14,14 +15,18 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  MyHomePage({Key? key, this.title}) : super(key: key);
+  const MyHomePage({
+    Key? key,
+    this.title,
+  }) : super(key: key);
 
   final String? title;
 
@@ -30,7 +35,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  Classifier _classifier = Classifier();
+  final Classifier _classifier = Classifier();
+  final NetworkService _networkService = NetworkService();
 
   @override
   void initState() {
@@ -45,6 +51,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return GameScreen(_classifier);
+    return GameScreen(_classifier, _networkService);
   }
 }

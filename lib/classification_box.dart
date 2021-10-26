@@ -5,8 +5,11 @@ class ClassificationBox extends StatelessWidget {
   final Rect location;
   final ClassificationResult classification;
 
-  ClassificationBox(
-      {Key? key, required this.location, required this.classification});
+  const ClassificationBox({
+    Key? key,
+    required this.location,
+    required this.classification,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +26,7 @@ class ClassificationBox extends StatelessWidget {
         height: location.height,
         decoration: BoxDecoration(
             border: Border.all(color: color, width: 3),
-            borderRadius: BorderRadius.all(Radius.circular(2))),
+            borderRadius: const BorderRadius.all(Radius.circular(2))),
         child: Align(
           alignment: Alignment.topLeft,
           child: FittedBox(
@@ -33,7 +36,7 @@ class ClassificationBox extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(classification.bestClassIndex.toString()),
-                  Text(" " + classification.score.toString()),
+                  Text(' ' + classification.score.toString()),
                 ],
               ),
             ),

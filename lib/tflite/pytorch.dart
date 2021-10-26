@@ -50,7 +50,7 @@ class _PyTorchPlugin {
 
   static Future<int?> loadModel(String model) async {
     try {
-      final args = {'model': '$model'};
+      final args = {'model': model};
       var result = (await channel.invokeMethod('loadModel', args)) as int;
       return result;
     } catch (err) {

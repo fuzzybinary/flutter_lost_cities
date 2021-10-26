@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 class ExpandingSection extends StatefulWidget {
   final Widget child;
   final bool expand;
-  ExpandingSection({this.expand = false, required this.child});
+
+  const ExpandingSection({
+    Key? key,
+    this.expand = false,
+    required this.child,
+  }) : super(key: key);
 
   @override
   State<StatefulWidget> createState() => _ExpandingSectionState();
@@ -23,8 +28,10 @@ class _ExpandingSectionState extends State<ExpandingSection>
 
   ///Setting up the animation
   void prepareAnimations() {
-    _expandController =
-        AnimationController(vsync: this, duration: Duration(milliseconds: 500));
+    _expandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _animation = CurvedAnimation(
       parent: _expandController,
       curve: Curves.fastOutSlowIn,

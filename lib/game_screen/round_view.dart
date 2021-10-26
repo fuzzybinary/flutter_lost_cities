@@ -12,22 +12,23 @@ class RoundButton extends StatelessWidget {
   final Function() onPressed;
   final bool enabled;
 
-  RoundButton({
+  const RoundButton({
+    Key? key,
     required this.color,
     required this.score,
     required this.onPressed,
     this.enabled = true,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(minWidth: 80),
+      constraints: const BoxConstraints(minWidth: 80),
       padding: const EdgeInsets.only(left: 4.0, right: 4.0),
       child: ElevatedButton(
         style: ButtonStyle(
           backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-            return this.color;
+            return color;
           }),
         ),
         onPressed: enabled ? onPressed : null,
@@ -43,8 +44,11 @@ class RoundDetails extends StatelessWidget {
   final GameRound round;
   final ScoreCallback onScoreRequested;
 
-  RoundDetails({Key? key, required this.round, required this.onScoreRequested})
-      : super(key: key);
+  const RoundDetails({
+    Key? key,
+    required this.round,
+    required this.onScoreRequested,
+  }) : super(key: key);
 
   Widget _expiditionRow(ExpiditionColorIndex expiditionColor) {
     return Row(
@@ -72,7 +76,7 @@ class RoundDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(left: 15, right: 5),
+      padding: const EdgeInsets.only(left: 15, right: 5),
       child: Column(
         children:
             ExpiditionColorIndex.values.map((e) => _expiditionRow(e)).toList(),
@@ -87,7 +91,7 @@ class RoundView extends StatefulWidget {
   final GameRound round;
   final ScoreCallback onScoreRequested;
 
-  RoundView(
+  const RoundView(
       {Key? key,
       required this.roundNumber,
       required this.round,
@@ -125,7 +129,7 @@ class _RoundViewState extends State<RoundView> {
 
   Widget _scoreWidget(ThemeData theme, String text) {
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8),
       child: Text(
         text,
         style: theme.textTheme.headline5,
@@ -145,7 +149,7 @@ class _RoundViewState extends State<RoundView> {
     return Theme(
       data: theme,
       child: Container(
-        padding: EdgeInsets.only(left: 6, right: 6),
+        padding: const EdgeInsets.only(left: 6, right: 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -155,12 +159,12 @@ class _RoundViewState extends State<RoundView> {
               child: Row(
                 children: [
                   Text(
-                    "Round ${widget.roundNumber}",
+                    'Round ${widget.roundNumber}',
                     style: theme.textTheme.headline5,
                   ),
                   Expanded(child: Container()),
                   _scoreWidget(theme, widget.round.player1Score.toString()),
-                  _scoreWidget(theme, "-"),
+                  _scoreWidget(theme, '-'),
                   _scoreWidget(theme, widget.round.player2Score.toString())
                 ],
               ),

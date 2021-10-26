@@ -6,11 +6,15 @@ class GameScreenAppBar extends SliverPersistentHeaderDelegate {
   final double expandedHeight;
   final int player1Score;
   final int player2Score;
+  final List<PopupMenuItem<String>>? popupItems;
+  final void Function(String value)? onPopupSelected;
 
   GameScreenAppBar({
     required this.expandedHeight,
     required this.player1Score,
     required this.player2Score,
+    this.popupItems,
+    this.onPopupSelected,
   });
 
   Widget _playerScore(ThemeData theme, TextStyle? style, int playerNumber,
@@ -18,7 +22,7 @@ class GameScreenAppBar extends SliverPersistentHeaderDelegate {
     return Column(
       children: [
         Text(
-          "Player $playerNumber",
+          'Player $playerNumber',
           style: theme.textTheme.bodyText1!
               .copyWith(color: Colors.white.withOpacity(1 - collapsedPercent)),
         ),
@@ -46,16 +50,25 @@ class GameScreenAppBar extends SliverPersistentHeaderDelegate {
     );
 
     return Container(
-      decoration: BoxDecoration(color: Colors.lightBlue),
+      decoration: const BoxDecoration(color: Colors.lightBlue),
       child: Stack(
         fit: StackFit.expand,
         children: [
           Container(
-            padding: EdgeInsets.only(top: 10),
+            alignment: Alignment.topRight,
+            child: SafeArea(
+              child: PopupMenuButton<String>(
+                onSelected: (value) => onPopupSelected?.call(value),
+                itemBuilder: (context) => popupItems ?? [],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.only(top: 10),
             alignment: Alignment.topCenter,
             child: SafeArea(
               child: Text(
-                "Lost Cities Scoring Helper",
+                'Lost Cities Scoring Helper',
                 style: theme.textTheme.headline6!.copyWith(
                   color: Colors.white.withOpacity(1 - collapsedPercent),
                   fontWeight: FontWeight.bold,
@@ -73,7 +86,7 @@ class GameScreenAppBar extends SliverPersistentHeaderDelegate {
                 children: [
                   _playerScore(
                       theme, scoreTextStyle, 1, player1Score, collapsedPercent),
-                  Text("-",
+                  Text('-',
                       style: theme.textTheme.headline3!
                           .copyWith(color: Colors.white)),
                   _playerScore(

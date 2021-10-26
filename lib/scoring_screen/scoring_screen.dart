@@ -11,7 +11,7 @@ class ScoringResult {
       List.filled(ExpiditionColorIndex.values.length, null);
 }
 
-typedef void ScoringResultCallback(
+typedef ScoringResultCallback = void Function(
     ExpiditionColorIndex expiditionIndex, int score);
 
 class ScoringScreen extends StatefulWidget {
@@ -19,39 +19,39 @@ class ScoringScreen extends StatefulWidget {
   final GameRound round;
   final ExpiditionColorIndex initialExpidition;
 
-  ScoringScreen(
-      {required this.classifier,
-      required this.initialExpidition,
-      required this.round});
+  const ScoringScreen({
+    Key? key,
+    required this.classifier,
+    required this.initialExpidition,
+    required this.round,
+  }) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() => _ScoringState(classifier, round);
+  State<StatefulWidget> createState() => _ScoringState();
 }
 
 class _ScoringState extends State<ScoringScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller = AnimationController(
+  late final AnimationController _controller = AnimationController(
       duration: const Duration(milliseconds: 200), vsync: this);
   late ThemeData _currentTheme;
   Animation<ThemeData>? _themeAnimation;
 
-  late ScoringBloc _bloc;
+  late final ScoringBloc _bloc;
   late Future _cameraDelayFuture;
 
-  Key _cameraKey = UniqueKey();
+  final Key _cameraKey = UniqueKey();
   bool _streamingCamera = true;
-
-  _ScoringState(Classifier classifier, GameRound round)
-      : _bloc = ScoringBloc(classifier, round);
 
   @override
   void initState() {
     super.initState();
 
+    _bloc = ScoringBloc(widget.classifier, widget.round);
     _bloc.currentExpidition = widget.initialExpidition;
     // Allow the screen to animate in before attempting to initialize the camera
     // This is a bit of a hack to avoid some visual jank
-    _cameraDelayFuture = Future.delayed(Duration(milliseconds: 500));
+    _cameraDelayFuture = Future.delayed(const Duration(milliseconds: 500));
   }
 
   @override
@@ -103,9 +103,11 @@ class _ScoringState extends State<ScoringScreen>
         bool isCurrent = element == _bloc.currentExpidition;
         return Expanded(
           child: Container(
-            decoration:
-                isCurrent ? BoxDecoration(color: Colors.amberAccent) : null,
-            padding: isCurrent ? EdgeInsets.only(left: 2, right: 2) : null,
+            decoration: isCurrent
+                ? const BoxDecoration(color: Colors.amberAccent)
+                : null,
+            padding:
+                isCurrent ? const EdgeInsets.only(left: 2, right: 2) : null,
             child: OutlinedButton(
               child: Text(isCurrent
                   ? '${_bloc.currentScore}'
@@ -141,8 +143,8 @@ class _ScoringState extends State<ScoringScreen>
   Widget _cameraViewStack(
       Key cameraKey, BuildContext context, ThemeData themeData) {
     final buttonStyle = ElevatedButton.styleFrom(
-      shape: CircleBorder(),
-      padding: EdgeInsets.all(15),
+      shape: const CircleBorder(),
+      padding: const EdgeInsets.all(15),
     );
 
     final cardButtons = Container(
@@ -153,7 +155,7 @@ class _ScoringState extends State<ScoringScreen>
             for (var i = 0; i < _bloc.enabledCards.length; ++i)
               _scoringButton(
                 themeData,
-                i < 3 ? "H" : (i - 1).toString(),
+                i < 3 ? 'H' : (i - 1).toString(),
                 i,
               ),
           ],
@@ -170,7 +172,7 @@ class _ScoringState extends State<ScoringScreen>
             child: ElevatedButton(
               onPressed: _onBack,
               style: buttonStyle,
-              child: Icon(Icons.fast_rewind),
+              child: const Icon(Icons.fast_rewind),
             ),
           ),
           Padding(
@@ -178,8 +180,9 @@ class _ScoringState extends State<ScoringScreen>
             child: ElevatedButton(
               onPressed: _onCameraPause,
               style: buttonStyle,
-              child:
-                  _streamingCamera ? Icon(Icons.pause) : Icon(Icons.play_arrow),
+              child: _streamingCamera
+                  ? const Icon(Icons.pause)
+                  : const Icon(Icons.play_arrow),
             ),
           ),
           Padding(
@@ -187,7 +190,7 @@ class _ScoringState extends State<ScoringScreen>
             child: ElevatedButton(
               onPressed: _onNext,
               style: buttonStyle,
-              child: Icon(Icons.fast_forward),
+              child: const Icon(Icons.fast_forward),
             ),
           ),
         ],
@@ -244,7 +247,7 @@ class _ScoringState extends State<ScoringScreen>
     return Theme(
       data: themeData,
       child: Scaffold(
-        appBar: AppBar(title: Text("Score: ${_bloc.currentScore}")),
+        appBar: AppBar(title: Text('Score: ${_bloc.currentScore}')),
         body: Center(
           child: Column(children: [
             Expanded(

@@ -3,19 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 enum ExpiditionColorIndex {
-  Yellow,
-  Blue,
-  White,
-  Green,
-  Red,
+  yellow,
+  blue,
+  white,
+  green,
+  red,
 }
 
 final List<String> expiditionColorNames = [
-  "Yellow",
-  "Blue",
-  "White",
-  "Green",
-  "Red"
+  'Yellow',
+  'Blue',
+  'White',
+  'Green',
+  'Red'
 ];
 
 final List<Color> expiditionColors = [
@@ -43,6 +43,6 @@ class GameRound {
     _isCompleteController.sink.add(value);
   }
 
-  StreamController<bool> _isCompleteController = StreamController<bool>();
+  final StreamController<bool> _isCompleteController = StreamController<bool>();
   Stream<bool> get isCompleteStream => _isCompleteController.stream;
 }
