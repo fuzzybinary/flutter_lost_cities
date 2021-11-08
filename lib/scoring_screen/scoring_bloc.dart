@@ -10,7 +10,7 @@ class ScoringBloc {
 
   bool _classifying = false;
 
-  ExpiditionColorIndex currentExpidition = ExpiditionColorIndex.Yellow;
+  ExpiditionColorIndex currentExpidition = ExpiditionColorIndex.yellow;
 
   // This is 3 hands + 9 number cards
   List<bool> _enabledCards = List.filled(12, false);

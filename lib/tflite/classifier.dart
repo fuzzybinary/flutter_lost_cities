@@ -31,7 +31,7 @@ class ClassificationResult {
 
   @override
   String toString() {
-    return "{$bestClassIndex: $score%}";
+    return '{$bestClassIndex: $score%}';
   }
 }
 
@@ -39,6 +39,7 @@ class Classifier {
   static const int _inputSize = 416;
   PyTorchModule? _pyTorchModule;
 
+  // ignore: unused_field
   Isolate? _isolate;
   late SendPort _processingPort;
 
@@ -57,7 +58,7 @@ class Classifier {
 
     _processingPort = await responsePort.first;
 
-    _pyTorchModule = await PyTorchModule.fromAsset("assets/lostcities.ptl");
+    _pyTorchModule = await PyTorchModule.fromAsset('assets/lostcities.ptl');
   }
 
   static void processingThread(SendPort responsePort) async {
@@ -200,6 +201,7 @@ class Classifier {
     return true;
   }
 
+  // ignore: unused_element
   Rect _uncropRect(Rect inputRect, Image originalImage, int inputImageSize) {
     var scale = 1.0;
     var offset = Offset.zero;

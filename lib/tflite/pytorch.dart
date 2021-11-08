@@ -54,6 +54,7 @@ class _PyTorchPlugin {
       var result = (await channel.invokeMethod('loadModel', args)) as int;
       return result;
     } catch (err) {
+      // ignore: avoid_print
       print('Error creating pytorch model: $err');
     }
   }

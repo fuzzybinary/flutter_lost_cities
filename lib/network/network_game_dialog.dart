@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_match/network/network_service.dart';
 
 import 'network_game_bloc.dart';
@@ -23,6 +24,13 @@ class _NetworkGameState extends State<NetworkGameDialog> {
     super.initState();
 
     _bloc = NetworkGameBloc(widget.networkService);
+  }
+
+  @override
+  void dispose() {
+    _bloc.dispose();
+
+    super.dispose();
   }
 
   @override
@@ -53,7 +61,40 @@ class _NetworkGameState extends State<NetworkGameDialog> {
   }
 
   Widget _buildSearchingWidget() {
-    return Container();
+    return Column(
+      children: [
+        for (var game in _bloc.gameList)
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(child: Text(game.name)),
+                ElevatedButton(
+                  child: const Text('Join'),
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0, right: 8.0),
+              child: ElevatedButton(
+                child: const Text('Cancel'),
+                onPressed: () {
+                  setState(() {
+                    _bloc.cancelSearch();
+                  });
+                },
+              ),
+            ),
+            const CircularProgressIndicator(),
+          ],
+        )
+      ],
+    );
   }
 
   Widget _buildConnectedWidget() {
@@ -63,6 +104,13 @@ class _NetworkGameState extends State<NetworkGameDialog> {
   Widget _buildNameInnerWidget() {
     return Column(children: [
       TextFormField(
+        initialValue: _bloc.gameName,
+        onChanged: (v) => setState(() {
+          _bloc.gameName = v;
+        }),
+        inputFormatters: [
+          FilteringTextInputFormatter.deny(';'),
+        ],
         decoration: const InputDecoration(
           labelText: 'Name:',
           border: OutlineInputBorder(),
@@ -73,10 +121,20 @@ class _NetworkGameState extends State<NetworkGameDialog> {
         children: [
           ElevatedButton(
             child: const Text('Search'),
-            onPressed: () {},
+            onPressed: _bloc.gameName.isEmpty ? null : _beginSearch,
           ),
         ],
       ),
     ]);
+  }
+
+  void _beginSearch() {
+    setState(() {
+      _bloc.beginSearch(_onGameListChanged);
+    });
+  }
+
+  void _onGameListChanged(List<SearchResult> games) {
+    setState(() {});
   }
 }
